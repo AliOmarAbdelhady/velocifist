@@ -127,6 +127,25 @@ window.addEventListener('keydown', (e) => {
 
 applyPipLayout(persist.settings);
 
+// PWA (M10): offline-after-first-visit. Production only — dev/preview servers
+// don't need a cache and HMR would fight it. Relative path keeps the scope
+// correct on GitHub Pages sub-paths and custom domains alike. The page primes
+// the SW cache with the assets it already loaded (they predate activation).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('sw.js').then(() =>
+      navigator.serviceWorker.ready.then((reg) => {
+        const urls = [location.href];
+        for (const r of performance.getEntriesByType('resource')) {
+          const size = (r as PerformanceResourceTiming).transferSize ?? 0;
+          if (size > 0 && r.name.startsWith(location.origin)) urls.push(r.name);
+        }
+        reg.active?.postMessage({ type: 'prime', urls });
+      }),
+    );
+  });
+}
+
 // ---------------------------------------------------------------- game shell
 
 type Phase = 'driving' | 'wrecked' | 'results';

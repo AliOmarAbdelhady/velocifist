@@ -150,3 +150,11 @@
 - **Latency readout:** audio output latency (base+output from AudioContext) + hand-tracker latency/delegate, live while the panel is open.
 - **Verification:** 210/210 tests (23 new: one-handed drive/steer-sign/brake/regrip/lost, sensitivity separation + full-lock, banner one-handed, comfort resolution, settings migration); build green; E2E `scripts/e2e-m9.mjs` green — options open/pause-freeze/persist nine settings/live PiP layout/quality pin 'pinned low'/reopen-synced/export download/two-click reset, plus a `?pipdemo=1` leg proving one-handed drives the real pipeline (TRACKING + HANDS_LOST both observed over a full demo cycle), 0 console errors.
 - Docs: PLAN v1.6, PILLs 086–090, ADR-011.
+
+### Session 12 (2026-09-23, M10) — ship prep: v1.0.0
+- **Deployment:** GitHub Pages enabled (workflow build type) at https://aliomarabdelhady.github.io/velocifist/ — CI workflow (typecheck + 210 tests + build) and deploy workflow (`--base=/velocifist/` → upload-pages-artifact → deploy-pages) push on every main commit. Private repo, public site (Pages semantics — disable in Settings→Pages if unwanted).
+- **PWA:** manifest + headless-rendered icon set + runtime cache-first service worker with first-visit priming (PILL 091). Offline-after-first-visit verified headless INCLUDING the 20 MB camera wasm+model. Installable (fullscreen, landscape, maskable icon).
+- **Budgets:** vendor chunk split (entry 653 KB → 148 KB app + 505 KB three, ~180 KB gzip initial); ship gates measured on the production build: load 83 ms, boot→driving 2.4 s (gates ≤ 3 s / ≤ 15 s).
+- **README replaced** (the M0 one still advertised the retired five-minute death rule): pitch, controls table incl. one-handed, quickstart, E2E script map, dev backdoors, architecture map, deployment + PWA notes, credits (MIT code; Three.js MIT; MediaPipe Apache-2.0; zero third-party art/audio per ADR-009).
+- **Verification:** 210/210 tests; build green; E2E `scripts/e2e-m10.mjs` green (budgets, manifest, SW activated+controlling, primed cache, wasm+model cached, offline reload boots, Pages-base build serves + drives under /velocifist/, 0 console errors).
+- Docs: PLAN v1.7, PILLs 091–093; version 1.0.0.
