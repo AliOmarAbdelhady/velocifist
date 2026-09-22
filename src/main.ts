@@ -26,6 +26,8 @@ import { CAM_MODES } from './render/cameraRig';
 import { GameAudio } from './audio/audio';
 import { QualityManager } from './core/quality';
 import { DemoHands } from './input/demoHands';
+import { EventDirector, EVENT_LABEL } from './sim/events';
+import { TelemetryRecorder, type RunTelemetry } from './core/telemetry';
 import { forwardAssist, applyAssist, type AssistView } from './sim/assist';
 import type { TrackerLike } from './render/pip';
 
@@ -90,8 +92,13 @@ class Game {
   private readonly assistView: AssistView = { brake: 0, ttc: Infinity };
   /** player's own brake BEFORE the assist blended in (chip gating) */
   private playerBrakePreAssist = 0;
+  private readonly events: EventDirector;
+  private readonly telemetry: TelemetryRecorder;
+  private runTelemetry: RunTelemetry | null = null;
   /** dev backdoor (?smash=1): ghost truck that re-arms ahead after each hit */
   private smashAgent: import('./sim/trafficTypes').TrafficAgent | null = null;
+  /** dev backdoor (?instantwreck=1): results/export E2E without a chase */
+  private instantWreck = false;
 
   constructor(
     private readonly getTracker: () => TrackerLike | null,
@@ -106,8 +113,10 @@ class Game {
     const runSeed = (Date.now() & 0x7fffffff) >>> 0;
     this.road = new RoadSystem({ seed: runSeed, theme: this.theme });
     this.director = new DifficultyDirector(runSeed);
+    this.events = new EventDirector(runSeed);
     this.car = new Car(tune);
     this.car.guide = this.road;
+    this.telemetry = new TelemetryRecorder(this.car, this.theme, runSeed);
     this.traffic = new TrafficSystem(
       { seed: runSeed, laneCount: this.road.laneCount, laneWidth: this.road.laneWidth },
       this.road,
@@ -125,6 +134,7 @@ class Game {
       });
       this.smashAgent = a;
     }
+    this.instantWreck = new URLSearchParams(location.search).has('instantwreck');
     this.scoring = new ScoringSystem();
     this.damage = new DamageSystem(tune.healthMax);
     this.scene = new GameScene(tune, this.road, this.theme, runSeed);
@@ -247,7 +257,8 @@ class Game {
       this.phase = 'results';
       audio?.setRunning(false);
       this.hud.show(false);
-      this.resultsScreen.show(this.scoring, this.car, this.themeName, this.runT, persist);
+      this.runTelemetry = this.telemetry.finish(this.runT, this.scoring, this.damage);
+      this.resultsScreen.show(this.scoring, this.car, this.themeName, this.runT, persist, this.runTelemetry);
       return;
     }
 
@@ -257,6 +268,22 @@ class Game {
       this.densityTimer = 0;
       this.traffic.setDensity(densityAt(this.runT));
     }
+
+    if (this.instantWreck && this.runT > 1.5 && this.phase === 'driving') {
+      this.damage.update(dt, [80], 0); // scripted wreck (dev backdoor)
+    }
+
+    // M8 variety director: survivable set-pieces + readable toasts.
+    // Mercy (2 early crashes) pauses the schedule.
+    const ev = this.events.tick(dt, this.traffic, this.road, {
+      s: this.traffic.playerS,
+      lat: this.traffic.playerLat,
+      u: this.car.u,
+      halfW: this.car.tune.bodyDims[0] / 2,
+      halfL: this.car.tune.bodyDims[2] / 2,
+    }, this.director.state.runTime < this.director.state.mercyUntil);
+    if (ev) this.hud.notify(EVENT_LABEL[ev], 'pass');
+    this.telemetry.sample(dt, this.scoring, this.damage, this.assistView.brake);
 
     // floating origin: pure +z translation, exact
     const dz = this.road.maybeRebase(this.car.z);
@@ -306,7 +333,7 @@ class Game {
       input: tracker
         ? `${this.arbiter.source} ${st ? st.status : ''} ${tracker.info.latencyMs.toFixed(0)}ms ${tracker.info.delegate} · assist ${this.assistView.brake.toFixed(2)} · t${this.car.throttleIn.toFixed(2)} b${this.car.brakeIn.toFixed(2)}`
         : `${this.arbiter.source} · assist ${this.assistView.brake.toFixed(2)} · t${this.car.throttleIn.toFixed(2)} b${this.car.brakeIn.toFixed(2)}`,
-      traffic: `${this.nearMissTotal} near-miss · ${this.crashTotal} crashes · ${this.traffic.agents.filter((a) => a.active).length} cars`,
+      traffic: `${this.nearMissTotal} near-miss · ${this.crashTotal} crashes · ${this.traffic.agents.filter((a) => a.active).length} cars · events ${this.events.history.length}${this.events.history.length ? ` (last ${this.events.history[this.events.history.length - 1]})` : ''}`,
       world: `${this.themeName} · s ${pS.toFixed(0)} · chunk ${chunk} · ${zone} · gen ${this.road.maxBuildMs.toFixed(2)}ms${this.coneHits > 0 ? ` · cones ${this.coneHits}` : ''}`,
       quality: `${this.quality.mode === 'auto' ? 'auto' : 'pinned'} ${this.quality.level} · ema ${this.quality.emaMs.toFixed(1)} ms`,
       audio: audio

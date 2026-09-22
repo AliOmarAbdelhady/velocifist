@@ -134,3 +134,10 @@
 - **AR:** PiP rewritten as an AR dashboard (skeletons with grip arcs + trails, rocker wheel with hand orbs + chevrons, pedal meters, gesture banner, pulsing status ring), screen-edge hand glow, hand-status toasts, bigger panel. `?pipdemo=1` drives the whole game with synthetic hands through the real pipeline.
 - **Verification:** 170/170 tests (arbiter/assist/demo/banner suites + PARTIAL-hold gate); E2E `scripts/e2e-m7.mjs` three runs green (demo autonomy + glow cycle; assist chase peak 0.70 + chip; fake-camera worker READY + lost UX), 0 console errors; visual QA subagent pass (glow visibility fixed from its findings).
 - Docs: PLAN v1.4 (M7 re-scope), ADR-010.
+
+### Session 10 (2026-09-23, M8) — variety & events complete
+- EventDirector with six deterministic, survivable set-pieces (convoy / rolling roadblock / road train / rubberneckers / cutter / weaver), each fairness-checked with full rollback; readable HUD toasts name the threat and the read; mercy pauses the schedule.
+- Injected agents are ordinary traffic: near-miss scoring, IDM, knocks — convoys measurably feed the score (12 near-misses in one E2E run).
+- Telemetry: 1 Hz run vitals + audit block, exportable JSON from the results screen (verified as a real download headless); seed recorded for world reproduction.
+- Verification: 187/187 tests (17 new events/telemetry gates); E2E `scripts/e2e-m8.mjs` green (event injected + toast caught on a clean drive; scripted-wreck run → results → download + "saved ✓"), 0 console errors.
+- Docs: PLAN v1.5, PILLs 081–085.

@@ -4,6 +4,7 @@
 import type { ScoringSystem } from '../sim/scoring';
 import type { Car } from '../sim/car';
 import type { ScoreEntry, PersistenceService } from '../persist/local';
+import { TelemetryRecorder, type RunTelemetry } from '../core/telemetry';
 
 export class ResultsScreen {
   private readonly root: HTMLElement;
@@ -11,6 +12,8 @@ export class ResultsScreen {
   private readonly newBest: HTMLElement;
   private readonly score: HTMLElement;
   private readonly table: HTMLElement;
+  private readonly exportBtn: HTMLElement;
+  private telemetry: RunTelemetry | null = null;
 
   constructor() {
     this.root = document.getElementById('results')!;
@@ -18,7 +21,16 @@ export class ResultsScreen {
     this.newBest = document.getElementById('newBest')!;
     this.score = document.getElementById('resultsScore')!;
     this.table = document.getElementById('resultsTable')!;
+    this.exportBtn = document.getElementById('btnExportRun')!;
+    this.exportBtn.addEventListener('click', this.onExport);
   }
+
+  private onExport = (): void => {
+    if (!this.telemetry) return;
+    const ok = TelemetryRecorder.download(this.telemetry);
+    this.exportBtn.textContent = ok ? 'saved ✓' : 'export failed';
+    setTimeout(() => (this.exportBtn.textContent = 'export run data'), 2000);
+  };
 
   show(
     scoring: ScoringSystem,
@@ -26,7 +38,10 @@ export class ResultsScreen {
     envName: string,
     durationSec: number,
     persist: PersistenceService,
+    telemetry: RunTelemetry | null = null,
   ): ScoreEntry {
+    this.telemetry = telemetry;
+    this.exportBtn.classList.toggle('hidden', telemetry === null);
     const c = scoring.counts;
     const totalNear = c.inches + c.veryClose + c.near;
     const entry: ScoreEntry = {

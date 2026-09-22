@@ -85,6 +85,55 @@ export class TrafficSystem {
     return this.road.laneLat(lane);
   }
 
+  get laneCount(): number {
+    return this.cfg.laneCount;
+  }
+
+  get laneWidth(): number {
+    return this.cfg.laneWidth;
+  }
+
+  /**
+   * Event-injector placement (M8): arm a slot with an explicit spec —
+   * same-direction lanes only, construction-aware, lane-gap-checked.
+   * Returns null (no allocation) when the spot is invalid; the caller owns
+   * fairness (placeBatch rolls back on a hasEscape violation).
+   */
+  spawnEventAgent(spec: {
+    lane: number;
+    s: number;
+    family: number;
+    speed: number;
+    desiredSpeed?: number;
+    signal?: -1 | 0 | 1;
+    laneTo?: number;
+  }): TrafficAgent | null {
+    const onc = this.road.oncomingAt(spec.s);
+    if (spec.lane < onc || spec.lane >= this.cfg.laneCount) return null;
+    if (this.road.laneBlocked(spec.s, spec.lane)) return null;
+    const slot = this.agents.find((a) => !a.active);
+    if (!slot) return null;
+    for (const a of this.agents) {
+      if (!a.active || a.dir !== 1) continue;
+      if (this.laneCenter(a.lane) !== this.laneCenter(spec.lane)) continue;
+      if (Math.abs(a.s - spec.s) < 24 + FAMILIES[a.family].halfL) return null;
+    }
+    this.arm(slot, spec.lane, spec.s, 1);
+    // arm() randomised family/speed — the event owns those
+    slot.family = spec.family;
+    slot.speed = spec.speed;
+    slot.desiredSpeed = spec.desiredSpeed ?? spec.speed;
+    slot.signal = 0;
+    slot.signalTimer = 0;
+    slot.laneTo = -1;
+    if (spec.signal) {
+      slot.signal = spec.signal;
+      if (spec.laneTo !== undefined && spec.laneTo >= 0) slot.laneTo = spec.laneTo;
+    }
+    this.mapToWorld(slot);
+    return slot;
+  }
+
   playerLane(lat: number): number {
     const l = Math.round(lat / this.cfg.laneWidth + (this.cfg.laneCount - 1) / 2);
     return clamp(l, 0, this.cfg.laneCount - 1);
