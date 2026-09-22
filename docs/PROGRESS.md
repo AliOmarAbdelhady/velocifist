@@ -2,16 +2,16 @@
 
 > Updated at the end of every work session. ✅ done · 🔶 partial · ⬜ not started.
 
-**Last updated:** 2026-09-22 (M0 session 1 — complete)
-**Current milestone:** M0 — Foundation ✅ (pending user visual confirmation of 60 FPS)
-**Next step:** user says "continue" → M1 (bicycle-model vehicle + chase camera + cones)
+**Last updated:** 2026-09-22 (M1 session 2 — complete)
+**Current milestone:** M1 — Vehicle & Camera Feel ✅ (automated gates green; user fun-panel + 60 FPS eyeball pending)
+**Next step:** user says "continue" → M2 ⭐ (hand-tracking core: worker + MediaPipe + gestures + calibration)
 
 ## Milestones
 
 | M | Scope | Status | Notes |
 |---|---|---|---|
 | M0 | Foundation: repo, Vite+TS, fixed-timestep loop, placeholder scene+car, dev HUD, tests | ✅ done | automated gates green; 60 FPS needs user's eyes |
-| M1 | Vehicle physics + chase camera feel | ⬜ | |
+| M1 | Vehicle physics + chase camera feel | ✅ done | 30/30 validation tests; fun panel on user |
 | M2 ⭐ | Hand-tracking core (worker, MediaPipe, gestures, calibration) | ⬜ | highest risk, done early |
 | M3 | Traffic AI + swept collision + near-miss detection | ⬜ | |
 | M4 | World streaming + 3 environments | ⬜ | |
@@ -43,7 +43,29 @@
 2. Determinism hash test green — ✅ `vehicle.test.ts` "bit-deterministic" (60 s scripted run, hash equality)
 3. Dev HUD shows frame time + draw calls (benchmark harness exists) — ✅
 
-## Session log
+## M1 checklist (session 2)
+
+- [x] `src/sim/car.ts` — deterministic bicycle model (slip angles, Pacejka curve, grip circle, weight transfer, speed-sensitive steering, slide assist, off-road, soft wall, gear/RPM model)
+- [x] `src/sim/cars/*.json` — Falcone GT / Vipera RS / Bruto Widebody tunes + `carTunes.ts`
+- [x] `src/sim/intent.ts`, `src/sim/rng.ts` (mulberry32 + stateless hashRng)
+- [x] `src/render/cameraRig.ts` — spring arm CHASE/HOOD/FAR, speed FOV, look-ahead bias, micro-shake
+- [x] `src/render/carView.ts` — roll/pitch springs, rolling/steering wheels, per-tune rebuild
+- [x] `src/render/cones.ts` — seeded instanced slalom course (stateless per-slot layout)
+- [x] `src/render/scene.ts` rewrite — follow-planes world (texture-anchored endless road), car travels for real
+- [x] Dev HUD extended (gear, rpm, β, lat g, cam mode) + live car switching (1/2/3) + camera cycle (C)
+- [x] Removed placeholder mule (`vehicle.ts` + its tests)
+- [x] Validation protocol tests (§6.3): 0–100, 100–0, cornering g, yaw overshoot, slalom, vMax, determinism, 10-min abuse — **30/30 green**
+- [x] `npm run build` green — 124.9 kB gzip
+
+### Session log — Session 2 (2026-09-22, M1)
+
+- **3 real physics bugs found & fixed by the validation gates:**
+  1. Tire curve written `sin(B·atan(C·α))` — collapses/oscillates past ~7° slip ⇒ every slide spun the car. Correct classic form is `sin(C·atan(B·α))` (PILL 015).
+  2. Brake force not negated — braking *accelerated* the car at launch-force levels (PILL 016).
+  3. Always-on β-based counter-steer assist unwound normal cornering (steady yaw 0.02 vs ~0.4); now triggers only on rear saturation + |β| > 0.2 (PILL 017).
+- **2 test-fixture corrections** (physics was right, fixtures were wrong): wide-road tune clones for dynamics tests; slalom needs a closed-loop cascade driver model — an open-loop sine steer random-walks off any road (PILL 018).
+- Tuning changes: Falcone μ 1.2; Vipera mid-engine geometry (a 1.42/b 1.08 ≈ 58% rear) + μ 1.26/1.45 to hit the 2.7 s RWD target.
+- Verification: `npm test` 30/30 · `npm run build` green (124.9 kB gzip).
 
 ### Session 1 — 2026-09-22 (M0 complete)
 - Project created at `/home/ali/velocifist` (user moved it out of `~/Klenka`).

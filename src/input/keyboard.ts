@@ -1,7 +1,7 @@
 // Keyboard fallback controller — permanent accessibility/dev input (PLAN §5.8).
 // Produces a reused DriverIntent object; the arbiter reads it by reference.
 
-import type { DriverIntent } from '../sim/vehicle';
+import type { DriverIntent } from '../sim/intent';
 
 export interface KeyboardController {
   /** Live intent (reused object — copy fields if you need to keep it). */

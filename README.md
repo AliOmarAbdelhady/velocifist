@@ -46,7 +46,8 @@ Camera + hand tracking arrive in **M2** (webcam permission will be requested the
 | `W` / `↑` | Throttle |
 | `S` / `↓` / `Space` | Brake |
 | `A` `D` / `←` `→` | Steer |
-| `C` | (M1) camera mode |
+| `C` | Cycle camera: chase / hood / far |
+| `1` `2` `3` | Switch car (Falcone / Vipera / Bruto) |
 
 ---
 Private repo. © 2026 — original archetype car designs; CC0 base assets (Kenney/Quaternius) reworked.

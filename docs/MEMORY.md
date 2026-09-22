@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-09-22 — M1 session 2 (vehicle dynamics + camera feel)
+
+- **PILL 014 · M1 DONE:** Bicycle-model `src/sim/car.ts` (slip angles, simplified Pacejka, grip circle per axle, longitudinal weight transfer, speed-sensitive steering, counter-steer assist, soft wall, off-road grip 0.55). 3 car tunes as JSON (`src/sim/cars/`). CameraRig (CHASE/HOOD/FAR spring arm, speed FOV 50→78, look-ahead biased into steer, micro-shake ∝ v², reduced-motion aware). CarView (roll/pitch spring visuals, rolling + steering front wheels). Cones (seeded instanced slalom, hashRng). Validation protocol = 30/30 tests green; build 124.9 kB gzip.
+- **PILL 015 · CRITICAL TIRE FORMULA:** correct shape is `F = μFz·sin(C·atan(B·α))` — **B inside atan, C outside** (B=8 stiffness, C=1.6 falloff; peak ≈ 10.7° slip, falls to ~59% at extreme slip = catchable drifts). The swapped version `sin(B·atan(C·α))` peaks at ~7° then **collapses to zero and oscillates** — every slide becomes an unrecoverable spin. Symptom was: spins, steady yaw 0.02 vs ~0.4 expected, overshoot 22×.
+- **PILL 016 · BUG (fixed):** brake force is a magnitude — must be **negated** before adding to axle forces. Symptom: full brake accelerated the car at launch-force levels (axLast +9.0 under brake=1). Found by step-by-step velocity trace, not by staring.
+- **PILL 017 · ASSIST RULE:** counter-steer assist must trigger **only on rear-axle saturation (rearSlip > 0.9) AND |β| > 0.2**. An always-on β-based assist unwinds *normal* cornering (β is naturally nonzero there) and crippled steady-state yaw by ~20×.
+- **PILL 018 · TEST-FIXTURE PHYSICS:** (a) dynamics-inspection tests (skidpad/step-steer/determinism) must run on a **wide-road tune clone** — any gripping turn at 100 km/h drifts tens of metres in seconds and pins the car on the guardrail, corrupting every metric. (b) An **open-loop sine steer random-walks off any road** — slalom tests use a cascade driver model (preview point → desired heading → heading loop with yaw damping, authority ±0.4). (c) Physical sizing: ±1.5 m weave @ 0.5 Hz @ 120 km/h ≈ 1.2 g demand — that limit-weave *is* the game's core thrill; 0.5-amplitude 0.55 Hz sines demand 4 g = impossible, cars correctly plow/spin.
+- **PILL 019 · DERIVED CAR OUTPUTS (for M2+):** `gear` (1..7), `rpmNorm` (audio/HUD), `beta`, `rearSlip` (drift FX), `axLast/ayLast` (camera shake, body roll/pitch). Keys: `C` cycle camera, `1/2/3` live car switch (pose carried over).
+- **PILL 020 · MODEL RULES:** no reverse (u clamped ≥ 0, M1 scope); rolling resistance & drag are sign-aware (coast can never push backward); soft wall at `roadHalfWidth + 0.9` (real OBB collision is M3); scrub damping 0.35/s on w, yaw damping 0.25/s — small, keeps 60 Hz Euler rock-stable without faking grip.
+- **PILL 021 · TUNE SHAPE:** `a` = CG→front, `b` = CG→rear; static axle loads = Fz·b/L front, Fz·a/L rear — so **bigger `a` = more rear weight** (Vipera mid-engine: a 1.42/b 1.08 ≈ 58% rear, RWD launch traction needs it for the 2.7 s target).
+
 ## 2026-09-22 — M0 session 1 (foundation complete)
 
 - **PILL 008 · M0 DONE:** Fixed-timestep loop (`src/core/loop.ts`: accumulator + alpha interpolation + `MAX_FRAME_DT 0.25` + `MAX_STEPS_PER_FRAME 10` panic guard + zero-alloc out-param). Deterministic mule (`src/sim/vehicle.ts`). Keyboard (reused intent obj). Scene (`src/render/scene.ts`). Dev HUD benchmark. 12/12 tests, build 120 kB gzip. Commit `5112a92` pushed.
