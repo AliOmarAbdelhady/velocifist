@@ -37,6 +37,12 @@ export class CalibrationWizard {
 
     return new Promise((resolve) => {
       const tick = (t: number): void => {
+        // camera died mid-wizard → abort cleanly back to the recovery flow
+        if (this.tracker.info.phase === 'ERROR') {
+          this.phase = 'DONE';
+          this.finish(resolve);
+          return;
+        }
         const dt = this.lastT ? (t - this.lastT) / 1000 : 0;
         this.lastT = t;
         this.pip.draw();

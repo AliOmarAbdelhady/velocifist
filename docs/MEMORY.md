@@ -5,6 +5,13 @@
 
 ---
 
+## 2026-09-22 — HOTFIX session (user: "camera turned off suddenly")
+
+- **PILL 030 · BUG OF THE DAY (fixed):** `HandTracker.start()` resolved immediately after POSTING worker init — model load takes 1–3 s — and the M2 flow then treated "not READY" as failure and called `stop()`, killing the granted camera stream. Symptom: camera LED on → off after ~2 s, dropped to keyboard mode. Fix: `start()` now `await`s the worker's `ready` message (25 s timeout). **Lesson: never treat async init as synchronous.**
+- **PILL 031 · CAMERA ROBUSTNESS (PLAN §22 drills, now real):** getUserMedia errors classified with actionable text (NotAllowed → address-bar icon; NotReadable → busy elsewhere; NotFound → no device). Track `ended`/`mute` handlers → phase ERROR + reason + `onLost` fires once. Consecutive-frame inference errors tolerated up to 45 then fail. `#camlost` overlay: Retry (new tracker; persisted calib → NO re-wizard) / Keyboard-only; game keeps AUTO-HOLDing meanwhile. Wizard aborts cleanly if the camera dies mid-calibration.
+- **PILL 032 · DEV-MACHINE FACTS:** HP TrueVision HD on `/dev/video0` (Bus 001 Device 002, uvc at `1-3`), works, ali not in `video` group but udev ACL grants access. USB autosuspend = `auto` after 2000 ms — harmless while the stream is held, but if cameras ever flake: `echo on | sudo tee /sys/bus/usb/devices/1-3/power/control` or a udev rule.
+- **PILL 033 · M3 IN PROGRESS:** `src/sim/trafficTypes.ts` landed (7 families + config + events). Remaining: TrafficSystem, collision, near-miss, renderer, tests — next session.
+
 ## 2026-09-22 — M2 session 3 (hand-tracking core)
 
 - **PILL 022 · M2 DONE (code-complete, live hardware validation pending user):** `tracker.worker.ts` (MediaPipe HandLandmarker GPU→CPU fallback, OffscreenCanvas 320×240, single-flight frames), `handTracker.ts` (camera + ImageBitmap pump + rVFC, mirroring, latency EMA, seconds clock), `handTracks.ts` (crossing-safe identity + `swap()`), `gestures.ts` (grip metric, magnitude-gated wheel, regrip FSM, calibration, AUTO-HOLD), `oneEuro.ts`, `arbiter.ts`, `pip.ts` (mirror video + skeleton + live wheel sprite + grip glows + pedal bars + latency), `calibrationWizard.ts` (side-fix → 75-frame anchor capture → 6 s practice with mean-error readout). 56/56 tests; build 130.9 kB gzip main + 144 kB worker.

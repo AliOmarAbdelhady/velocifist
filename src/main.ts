@@ -1,8 +1,8 @@
-// VELOCIFIST — M2 bootstrap: full hand-tracking flow.
+// VELOCIFIST — bootstrap (M2 flow + camera-loss recovery):
 // START → camera explainer → (optional) camera + calibration wizard → drive
 // with the input arbiter merging hands (primary) and keyboard (fallback).
-// The PiP overlay renders the webcam, skeletons, the live virtual wheel,
-// grip glows and pedal bars for the "game understands my hands" magic.
+// If the camera dies mid-run: overlay offers Retry (calibration is persisted,
+// no re-wizard needed) or continuing on keyboard.
 
 import { createLoop } from './core/loop';
 import { Car } from './sim/car';
@@ -18,6 +18,8 @@ import { CAM_MODES } from './render/cameraRig';
 
 const overlay = document.getElementById('overlay')!;
 const camchoice = document.getElementById('camchoice')!;
+const camlost = document.getElementById('camlost')!;
+const camlostReason = document.getElementById('camlostReason')!;
 const pipwrap = document.getElementById('pipwrap')!;
 const pipMount = document.getElementById('pipMount')!;
 const wizardRoot = document.getElementById('wizard')!;
@@ -33,23 +35,28 @@ overlay.addEventListener(
 
 document.getElementById('btnKb')!.addEventListener('click', () => {
   camchoice.classList.add('hidden');
-  void boot(null);
+  boot(null);
 });
 
 document.getElementById('btnCam')!.addEventListener('click', () => {
   camchoice.classList.add('hidden');
+  void startWithCamera();
+});
+
+async function startWithCamera(): Promise<void> {
   const tracker = new HandTracker();
-  void (async () => {
-    await tracker.start();
-    if (tracker.info.phase !== 'READY') {
-      // denied or failed → fall back to keyboard with a clear message
-      tracker.stop();
-      void boot(null, `camera: ${tracker.info.phase}${tracker.info.error ? ` (${tracker.info.error})` : ''} — keyboard mode`);
-      return;
-    }
-    pipwrap.classList.remove('hidden');
-    const pip = new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, tracker);
-    // enlarge + center the PiP inside the wizard while calibrating
+  // start() resolves only when the worker is genuinely READY (or classified error)
+  await tracker.start();
+  if (tracker.info.phase !== 'READY') {
+    const why = tracker.info.error ?? tracker.info.phase;
+    tracker.stop();
+    boot(null, `camera unavailable — ${why}. Keyboard mode (retry via reload).`);
+    return;
+  }
+  pipwrap.classList.remove('hidden');
+  let pip = new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, tracker);
+
+  if (!tracker.solver.calibrated) {
     wizardRoot.classList.remove('hidden');
     pipMount.appendChild(pipwrap);
     const wizard = new CalibrationWizard(tracker, pip, {
@@ -59,12 +66,62 @@ document.getElementById('btnCam')!.addEventListener('click', () => {
       progress: document.getElementById('wizardBar') as HTMLElement,
     });
     await wizard.run();
-    document.body.appendChild(pipwrap); // back to the corner
-    void boot(tracker, undefined, pip);
-  })();
-});
+    document.body.appendChild(pipwrap); // PiP back to the corner
+  }
 
-function boot(tracker: HandTracker | null, note?: string, pip?: PipRenderer | null): void {
+  bootWithRecovery(tracker, pip);
+}
+
+function bootWithRecovery(initialTracker: HandTracker, initialPip: PipRenderer): void {
+  let tracker: HandTracker | null = initialTracker;
+  let pip: PipRenderer | null = initialPip;
+
+  tracker.onLost = (reason: string): void => {
+    camlostReason.textContent = reason;
+    camlost.classList.remove('hidden');
+  };
+
+  document.getElementById('btnRetry')!.onclick = async (): Promise<void> => {
+    camlost.classList.add('hidden');
+    tracker?.stop();
+    const nt = new HandTracker();
+    await nt.start(); // calib is persisted → no re-wizard
+    if (nt.info.phase !== 'READY') {
+      camlostReason.textContent = nt.info.error ?? nt.info.phase;
+      camlost.classList.remove('hidden');
+      tracker = null;
+      pip = null;
+      pipwrap.classList.add('hidden');
+      return;
+    }
+    nt.onLost = (reason2: string): void => {
+      camlostReason.textContent = reason2;
+      camlost.classList.remove('hidden');
+    };
+    tracker = nt;
+    pip = new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, nt);
+    pipwrap.classList.remove('hidden');
+  };
+  document.getElementById('btnKb2')!.onclick = (): void => {
+    camlost.classList.add('hidden');
+    tracker?.stop();
+    tracker = null;
+    pip = null;
+    pipwrap.classList.add('hidden');
+  };
+
+  startLoop(() => tracker, () => pip);
+}
+
+function boot(tracker: HandTracker | null, note?: string): void {
+  startLoop(() => tracker, () => null, note);
+}
+
+function startLoop(
+  getTracker: () => HandTracker | null,
+  getPip: () => PipRenderer | null,
+  note?: string,
+): void {
   let car = new Car(CAR_TUNES[0]);
   const keyboard = createKeyboard();
   const arbiter = new InputArbiter();
@@ -98,6 +155,7 @@ function boot(tracker: HandTracker | null, note?: string, pip?: PipRenderer | nu
     step(dt) {
       keyboard.update(dt);
       const t = performance.now() / 1000;
+      const tracker = getTracker();
       const handIntent = tracker ? tracker.solver.intent : null;
       const handConf = tracker ? tracker.solver.state.confidence : 0;
       arbiter.update(handIntent, handConf, keyboard.intent, t);
@@ -107,6 +165,8 @@ function boot(tracker: HandTracker | null, note?: string, pip?: PipRenderer | nu
       car.step(dt, arbiter.intent);
     },
     render(alpha, frameDt) {
+      const tracker = getTracker();
+      const pip = getPip();
       const pose = {
         x: px + (car.x - px) * alpha,
         z: pz + (car.z - pz) * alpha,
