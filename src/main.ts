@@ -23,6 +23,8 @@ import { ResultsScreen } from './ui/results';
 import { Garage } from './ui/garage';
 import { PersistenceService } from './persist/local';
 import { CAM_MODES } from './render/cameraRig';
+import { GameAudio } from './audio/audio';
+import { QualityManager } from './core/quality';
 
 const overlay = document.getElementById('overlay')!;
 const camchoice = document.getElementById('camchoice')!;
@@ -39,6 +41,10 @@ let nextTheme: ThemeId = pinnedTheme ?? 'coastal';
 
 const persist = new PersistenceService();
 
+// Procedural audio (M6): created once, resumed on the first user gesture.
+const audio = GameAudio.create();
+audio?.setVolume(persist.settings.volume);
+
 // ---------------------------------------------------------------- game shell
 
 type Phase = 'driving' | 'wrecked' | 'results';
@@ -51,6 +57,7 @@ class Game {
   private readonly resultsScreen = new ResultsScreen();
   private readonly keyboard = createKeyboard();
   private readonly arbiter = new InputArbiter();
+  private readonly quality: QualityManager;
   private readonly onRetryClick = (): void => this.retry();
   private readonly onGarageClick = (): void => this.toGarage();
 
@@ -71,6 +78,8 @@ class Game {
   private nearMissTotal = 0;
   private crashTotal = 0;
   private coneHits = 0;
+  /** dev backdoor (?smash=1): ghost truck that re-arms ahead after each hit */
+  private smashAgent: import('./sim/trafficTypes').TrafficAgent | null = null;
 
   constructor(
     private readonly getTracker: () => HandTracker | null,
@@ -91,10 +100,30 @@ class Game {
       { seed: runSeed, laneCount: this.road.laneCount, laneWidth: this.road.laneWidth },
       this.road,
     );
+    // dev/E2E backdoor (?smash=1): a slow truck in the player's lane 80 m
+    // ahead — guarantees a heavy contact to exercise the M6 crash chain
+    // (sparks, smoke, crash audio, wreck, results) deterministically.
+    if (new URLSearchParams(location.search).has('smash')) {
+      const a = this.traffic.agents[0];
+      Object.assign(a, {
+        active: true, id: 999, family: 5, lane: 1,
+        s: 80, lat: 0, dir: 1,
+        speed: 6, desiredSpeed: 6, state: 'CRUISE',
+        x: 0, z: -80, heading: 0, passCounted: false, hadContact: false,
+      });
+      this.smashAgent = a;
+    }
     this.scoring = new ScoringSystem();
     this.damage = new DamageSystem(tune.healthMax);
     this.scene = new GameScene(tune, this.road, this.theme, runSeed);
     this.themeName = this.scene.themeName;
+    this.quality = new QualityManager(persist.settings.quality, (_level, preset) => {
+      this.scene.applyQuality(preset);
+    });
+    this.scene.applyQuality(this.quality.preset);
+    audio?.retune(tune);
+    audio?.setRunning(true);
+    this.scene.setDamageState('PRISTINE');
     if (note) this.devhud.note(note);
 
     window.addEventListener('keydown', this.onKey);
@@ -126,6 +155,21 @@ class Game {
       return;
     }
 
+    // dev backdoor: once the ghost truck has been hit (KNOCKED) or passed,
+    // re-arm it 150 m ahead in prime collision condition
+    if (
+      this.smashAgent &&
+      (this.smashAgent.state === 'KNOCKED' || this.smashAgent.s < this.traffic.playerS - 25)
+    ) {
+      Object.assign(this.smashAgent, {
+        active: true, s: this.traffic.playerS + 150, lat: 0, dir: 1,
+        speed: 6, desiredSpeed: 6, state: 'CRUISE', signal: 0,
+        passCounted: false, hadContact: false,
+        nmTracked: false, nmWasAhead: false, nmMinClearance: 99,
+        knockedTimer: 0,
+      });
+    }
+
     const wrecked = this.phase === 'wrecked';
     const intent = wrecked
       ? { steer: this.arbiter.intent.steer * 0.4, throttle: 0, brake: 0.35 }
@@ -147,6 +191,13 @@ class Game {
     this.nearMissTotal += nearMisses.length;
     this.crashTotal += crashes.length;
     for (const c of crashes) this.director.registerCrash();
+    for (const c of crashes) {
+      audio?.crash(c.impulse);
+      this.scene.fx.burstSparks(c.x, 0.55, c.z, c.impulse);
+    }
+    for (const nm of nearMisses) {
+      audio?.whoosh(nm.side, nm.closingSpeed, nm.oncoming);
+    }
 
     const impulses = crashes.map((c) => c.impulse);
     const events = this.damage.update(
@@ -155,13 +206,20 @@ class Game {
       this.scoring.flowRegenClamped(dt, this.damage.health, this.damage.healthMax),
     );
     this.car.powerScale = this.damage.powerScale;
-    void events; // damage FX (smoke/sparks) land in M6
+    this.scene.setDamageState(this.damage.state);
+    for (const ev of events) {
+      if (ev.kind === 'WRECK') {
+        audio?.wreck();
+        this.scene.fx.wreckBurst(this.car.x, this.car.z);
+      }
+    }
 
     if (this.damage.wrecked && !wrecked && this.phase === 'driving') {
       this.phase = 'wrecked';
     }
     if (this.phase === 'wrecked' && this.damage.wreckTimer > 2.2) {
       this.phase = 'results';
+      audio?.setRunning(false);
       this.hud.show(false);
       this.resultsScreen.show(this.scoring, this.car, this.themeName, this.runT, persist);
       return;
@@ -181,6 +239,7 @@ class Game {
       this.pz += dz;
       this.traffic.shiftWorld(dz);
       this.scene.rig.rebase(dz);
+      this.scene.rebase(dz);
     }
   }
 
@@ -194,6 +253,8 @@ class Game {
     };
     this.coneHits += this.scene.update(pose, this.car, this.traffic, frameDt, performance.now() / 1000);
     pip?.draw();
+    audio?.updateEngine(this.car, frameDt);
+    this.quality.observeFrame(frameDt * 1000);
     if (this.phase !== 'results') this.hud.update(this.car, this.scoring, this.damage);
 
     const pS = this.traffic.playerS;
@@ -213,12 +274,17 @@ class Game {
         : this.arbiter.source,
       traffic: `${this.nearMissTotal} near-miss · ${this.crashTotal} crashes · ${this.traffic.agents.filter((a) => a.active).length} cars`,
       world: `${this.themeName} · s ${pS.toFixed(0)} · chunk ${chunk} · ${zone} · gen ${this.road.maxBuildMs.toFixed(2)}ms${this.coneHits > 0 ? ` · cones ${this.coneHits}` : ''}`,
+      quality: `${this.quality.mode === 'auto' ? 'auto' : 'pinned'} ${this.quality.level} · ema ${this.quality.emaMs.toFixed(1)} ms`,
+      audio: audio
+        ? `engine ${this.car.tune.id} · latency ${audio.latencyMs !== null ? `${audio.latencyMs.toFixed(1)} ms` : 'n/a'} · vol ${(persist.settings.volume * 100).toFixed(0)}%`
+        : 'unavailable',
     });
   }
 
   private onKey = (e: KeyboardEvent): void => {
     if (e.code === 'KeyC') this.scene.cycleCamera();
     else if (e.code === 'KeyT') this.cycleTheme();
+    else if (e.code === 'KeyQ') this.cycleQuality();
     else if (e.code === 'Digit1') this.switchCar(0);
     else if (e.code === 'Digit2') this.switchCar(1);
     else if (e.code === 'Digit3') this.switchCar(2);
@@ -241,6 +307,8 @@ class Game {
     this.car.u = old.u;
     this.scene.setCarTune(tune);
     this.damage = new DamageSystem(tune.healthMax);
+    this.scene.setDamageState('PRISTINE');
+    audio?.retune(tune);
   };
 
   private cycleTheme = (): void => {
@@ -248,6 +316,11 @@ class Game {
     this.theme = THEME_ORDER[(cur + 1) % THEME_ORDER.length];
     this.scene.setTheme(this.theme);
     this.devhud.note(`theme → ${this.theme} (visuals only — zone layout keeps the run's seed)`);
+  };
+
+  private cycleQuality = (): void => {
+    this.quality.cycle();
+    this.devhud.note(`quality → ${this.quality.mode === 'auto' ? `auto (${this.quality.level})` : this.quality.level}`);
   };
 
   private retry(): void {
@@ -264,6 +337,7 @@ class Game {
   dispose(): void {
     this.loop?.stop();
     this.loop = null;
+    audio?.setRunning(false);
     this.resultsScreen.hide();
     this.hud.show(false);
     this.scene.dispose();
@@ -288,6 +362,9 @@ function showGarage(): void {
 }
 
 function chooseInput(tune: CarTune): void {
+  audio?.init();
+  audio?.retune(tune);
+  audio?.revBlip();
   camchoice.classList.remove('hidden');
   const onCam = (): void => {
     camchoice.classList.add('hidden');
@@ -406,6 +483,7 @@ function launch(
 overlay.addEventListener(
   'click',
   () => {
+    audio?.init();
     overlay.classList.add('hidden');
     showGarage();
   },

@@ -76,3 +76,17 @@ M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determi
 **Decision:** VELOCIFIST is an easy, relaxed arcade cruiser. (a) Driving assists ship always-on: lane-keep assist (road-heading + lane-centre pull, full strength with quiet hands, 35% when steering deliberately), stronger yaw/slide damping, earlier counter-steer, forgiving guardrail grazes and grass. (b) The 4–6-minute elite death target is removed: density ramps 6.5→9 veh/km/lane over 4 min then flattens, oncoming zones are rarer (p .35), construction sparse. (c) Health/wreck still exists — mistakes still end runs — but FLOW regen (0.5 HP/s to 35% cap) and 0.8 s impact-window merging make survival the default. Risk stays opt-in via the near-miss scoring model (unchanged): thrill is how close YOU choose to shave.
 
 **Consequences:** PLAN v1.2 (pillar 4, §11.2, roadmap M7/M8 reworded). Raw-dynamics tests run with `laneAssist = false`; assist behaviour has its own gates (sloppy-driver centring). Scoring/balance numbers remain hypotheses for M8 comfort tuning rather than survival tuning.
+
+## ADR-009 — M6 art & audio: fully procedural, asset pipeline deferred
+
+**Date:** 2026-09-22 · **Status:** accepted
+
+**Context.** PLAN §12/§13 sketched a CC0-asset pipeline (Kenney/Quaternius bases → Blender → glTF+Draco+KTX2) for hero cars, and left a decision point on engine-audio synthesis vs sampled loops.
+
+**Decision.** Ship M6 with 100% procedural content:
+- Hero cars are code-built extruded-profile meshes (~2–4 k tris each) with material merging — no external assets, no pipeline tooling, instant load, trivially recolorable/re-shapable per archetype.
+- Audio is 100% WebAudio synthesis (ignition-pulse engine model, layered one-shots, beds). Zero audio files.
+
+**Why.** The asset pipeline adds toolchain risk and licensing surface for marginal gain at our poly/lighting budget (the look comes from lighting/grading/motion — PLAN's own "AAA-adjacent" thesis). Synthesis gives infinite RPM resolution and per-car character for free. Both fallback paths stay open and cheap to add later (a glTF hero drop-in replaces CarView.build; a CC0 engine loop replaces the engine voice only — the rest of the graph is independent).
+
+**Consequences.** Audio quality judgement needs human ears — user playtest decides if the synthesis holds; if not, only the engine layer is swapped (PLAN decision point resolved as: implemented procedural, fallback documented). Audio latency measured live in the dev HUD (34–51 ms observed in software-GL headless; the <30 ms gate applies to real hardware).

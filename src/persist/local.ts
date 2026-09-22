@@ -22,7 +22,9 @@ export interface GameSettings {
   car: string;
   envPin: string | null;
   volume: number;
-  quality: 'low' | 'medium' | 'high';
+  /** 'auto' = presets with the frame-time auto-scaler (ADR-008 easy-first,
+   *  M6 quality system); manual levels pin the preset */
+  quality: 'auto' | 'low' | 'medium' | 'high';
 }
 
 export interface Progress {
@@ -50,7 +52,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   car: 'falcone-gt',
   envPin: null,
   volume: 0.8,
-  quality: 'medium',
+  quality: 'auto',
 };
 
 export const DEFAULT_PROGRESS: Progress = {

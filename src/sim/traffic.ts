@@ -45,11 +45,11 @@ const clamp = (v: number, lo: number, hi: number): number =>
 export class TrafficSystem {
   readonly agents: TrafficAgent[] = [];
   readonly nearMisses: NearMissEvent[] = Array.from({ length: 64 }, () => ({
-    agentId: 0, tier: 'NEAR' as const, clearance: 0, closingSpeed: 0, oncoming: false,
+    agentId: 0, tier: 'NEAR' as const, clearance: 0, closingSpeed: 0, oncoming: false, side: 0,
   }));
   nearMissCount = 0;
   readonly crashes: CrashEvent[] = Array.from({ length: 16 }, () => ({
-    agentId: 0, impulse: 0, headOn: false,
+    agentId: 0, impulse: 0, headOn: false, x: 0, z: 0,
   }));
   crashCount = 0;
   readonly passes: PassEvent[] = Array.from({ length: 64 }, () => ({
@@ -477,6 +477,8 @@ export class TrafficSystem {
           agentId: a.id,
           impulse: closing,
           headOn: nx * fx + nz * fz < -0.5,
+          x: (car.x + a.x) * 0.5,
+          z: (car.z + a.z) * 0.5,
         };
       }
       a.hadContact = true;
@@ -534,6 +536,7 @@ export class TrafficSystem {
               clearance: a.nmMinClearance,
               closingSpeed: car.u - a.dir * a.speed,
               oncoming: a.dir < 0,
+              side: a.lat - this.playerLat,
             };
           }
         }

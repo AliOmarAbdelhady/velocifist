@@ -102,6 +102,9 @@ export interface NearMissEvent {
   clearance: number;
   closingSpeed: number; // m/s
   oncoming: boolean;
+  /** signed lateral side of the agent relative to the player (+ = road-right);
+   *  audio pans the whoosh, HUD could mirror it */
+  side: number;
 }
 
 export interface CrashEvent {
@@ -109,6 +112,9 @@ export interface CrashEvent {
   /** impulse magnitude along the contact normal, m/s (per player-mass) */
   impulse: number;
   headOn: boolean;
+  /** world-space contact midpoint (M6 FX seeds sparks here) */
+  x: number;
+  z: number;
 }
 
 export interface TrafficConfig {

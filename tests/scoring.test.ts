@@ -17,7 +17,7 @@ function carAt(u: number): Car {
 }
 
 function nm(tier: NearMissTier, oncoming = false, closing = 30): NearMissEvent {
-  return { agentId: 1, tier, clearance: 0.3, closingSpeed: closing, oncoming };
+  return { agentId: 1, tier, clearance: 0.3, closingSpeed: closing, oncoming, side: 1.5 };
 }
 
 function pass(closing: number, oncoming = false): PassEvent {

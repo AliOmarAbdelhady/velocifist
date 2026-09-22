@@ -14,6 +14,8 @@ export interface HudInfo {
   input: string;
   traffic: string;
   world: string;
+  quality: string;
+  audio: string;
 }
 
 export class DevHud {
@@ -47,6 +49,8 @@ export class DevHud {
       `in   ${info.input}\n` +
       `trf  ${info.traffic}\n` +
       `wld  ${info.world}\n` +
-      `cars 1/2/3 · cam C · theme T${this.noteText ? `\n${this.noteText}` : ''}`;
+      `qly  ${info.quality}\n` +
+      `aud  ${info.audio}\n` +
+      `cars 1/2/3 · cam C · theme T · quality Q${this.noteText ? `\n${this.noteText}` : ''}`;
   }
 }

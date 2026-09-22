@@ -109,6 +109,12 @@ export class Car {
   laneAssist = true;
   /** engine power multiplier (damage CRITICAL state sets 0.92) */
   powerScale = 1;
+  /** last driver intent (audio + brake lights read these; derived state,
+   *  not part of the dynamics hash) */
+  throttleIn = 0;
+  brakeIn = 0;
+  /** surface flag from the last step (audio rumble + FX read it) */
+  offRoadLast = false;
   readonly tune: CarTune;
 
   constructor(tune: CarTune) {
@@ -117,6 +123,8 @@ export class Car {
 
   step(dt: number, intent: DriverIntent): void {
     const t = this.tune;
+    this.throttleIn = intent.throttle;
+    this.brakeIn = intent.brake;
 
     // ---- surface + aero ----
     // curved world: measure the road-frame lateral offset when a guide is set
@@ -130,6 +138,7 @@ export class Car {
       latAbs = Math.abs(this.x);
     }
     const offRoad = latAbs > t.roadHalfWidth;
+    this.offRoadLast = offRoad;
     // EASY: grass punishes less — recoverable, not a run-ender
     const gripScale = offRoad ? 0.7 : 1;
     // downforce: supercars literally stick more the faster they go

@@ -117,3 +117,13 @@
 - **TS strict fix:** `: void`-annotated expression arrow returning `Set.delete()`'s boolean.
 - Verification: `npm test` 12/12 · `npm run build` green (120 kB gzip) · repo pushed PRIVATE.
 - Files: 20 committed, 2,902 lines. Commit `5112a92`.
+
+### Session 8 (2026-09-22, M6) — art & audio pass complete
+- **Hero cars:** procedural extruded-profile supercars per archetype (Falcone GT wedge / Vipera RS teardrop + rear wing / Bruto box + scoop), glass greenhouse, spoke-texture rims that spin, brake-light bar, night headlights, blob shadow, damage presentation (sooty paint, loose wobbling bumper, dying/flickering lights, wreck askew). ~16 draws/car via per-material merging (PILL 064 mergeMix gotcha).
+- **FX:** pooled GPU particles (sparks at crash contacts, damage/tire smoke with per-particle size/alpha/color shader) + camera-space speed-line streaks (retuned curve after QA showed the first was sub-perceptual).
+- **Grade pass:** linear RT → single quad (theme tint/sat/vignette/speed-CA/grain), ACES tone mapping, off on Low. Theme-matched PMREM env maps for paint reflections.
+- **Quality:** low/med/high presets + EMA autoscaler with hysteresis + manual cap; settings.quality 'auto' default; Q cycles; dev HUD line.
+- **Audio (ADR-009):** 100% procedural WebAudio — per-cylinder ignition synthesis, load distortion, gear torque-cuts, turbo + blow-off (Vipera), wind/rumble/squeal beds, panned near-miss whooshes, layered crashes ∝ impulse, wreck cut; master compressor; latency readout in dev HUD.
+- **Wiring:** CarView update from Car (brake/throttle/offroad fields), NearMissEvent.side, CrashEvent.x/z for spark anchors, damage-state plumbing into car + FX, audio lifecycle across run/retry/results, floating-origin fx.rebase.
+- **Robustness:** camera-rig spring substepping (was divergent on slow frames — QA-caught), favicon 404 silenced.
+- **Verification:** 150/150 tests (25 new: quality/autoscaler, audio curves, damage visuals, grade data); build green; headless-Chrome E2E (`scripts/e2e-m6.mjs` + `?smash=1` backdoor) drives → 216 km/h → near-miss whooshes → crash chain (sparks/smoke/screenshots confirmed by QA subagent: 5 PASS / 1 PASS-WITH-ISSUES resolved by streak retune) → WRECKED → results with audit table; 0 console errors. IAB pane was occluded this session → headless path (PILL 072).

@@ -48,11 +48,20 @@ export class CameraRig {
   }
 
   update(dt: number, c: RigInput, vMax: number): void {
+    // The spring is only stable for steps ≲ 2/ω (ω up to 12 ⇒ ~17 ms).
+    // Slow frames (background tab, hitch, weak GPU) would fling the rig —
+    // substep the integration so the camera survives any frame rate.
+    const steps = Math.max(1, Math.min(8, Math.ceil(dt / 0.033)));
+    const h = dt / steps;
+    for (let i = 0; i < steps; i++) this.substep(h, c, vMax);
+    this.finish(dt, c, vMax);
+  }
+
+  private substep(dt: number, c: RigInput, vMax: number): void {
     const speedFrac = Math.min(Math.abs(c.u) / vMax, 1);
     const sinH = Math.sin(c.heading);
     const cosH = Math.cos(c.heading);
     _fwd.set(sinH, 0, -cosH);
-    _right.set(cosH, 0, sinH);
 
     if (this.mode === 1) {
       // HOOD: rigid mount, slightly ahead of the cabin
@@ -72,6 +81,15 @@ export class CameraRig {
       this.vel.multiplyScalar(Math.max(0, 1 - cd * dt));
       this.pos.addScaledVector(this.vel, dt);
     }
+  }
+
+  /** Look target, micro-shake and FOV run once per frame (not per substep). */
+  private finish(dt: number, c: RigInput, vMax: number): void {
+    const speedFrac = Math.min(Math.abs(c.u) / vMax, 1);
+    const sinH = Math.sin(c.heading);
+    const cosH = Math.cos(c.heading);
+    _fwd.set(sinH, 0, -cosH);
+    _right.set(cosH, 0, sinH);
 
     // look-ahead, biased into the steer direction (12% of the lookahead)
     const lookAhead = 4 + 0.04 * Math.abs(c.u);
