@@ -90,3 +90,16 @@ M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determi
 **Why.** The asset pipeline adds toolchain risk and licensing surface for marginal gain at our poly/lighting budget (the look comes from lighting/grading/motion — PLAN's own "AAA-adjacent" thesis). Synthesis gives infinite RPM resolution and per-car character for free. Both fallback paths stay open and cheap to add later (a glTF hero drop-in replaces CarView.build; a CC0 engine loop replaces the engine voice only — the rest of the graph is independent).
 
 **Consequences.** Audio quality judgement needs human ears — user playtest decides if the synthesis holds; if not, only the engine layer is swapped (PLAN decision point resolved as: implemented procedural, fallback documented). Audio latency measured live in the dev HUD (34–51 ms observed in software-GL headless; the <30 ms gate applies to real hardware).
+
+## ADR-010 — Input robustness: hold-not-cut + driver aids (M7 hands pass)
+
+**Date:** 2026-09-23 · **Status:** accepted
+
+**Context.** User feedback: "detecting the hand is not very good", "make the game very easy". Diagnosis: detection dropouts were amplified by the INPUT CONTRACT — the arbiter hard-cut intent below 0.5 confidence, so single-frame flickers zeroed the throttle and the solver's careful degradation never reached the car.
+
+**Decision.**
+1. **Hold-not-cut contract:** hand intent survives confidence dropouts (EMA + hysteresis + 0.8 s hold window; one-hand-flicker holds throttle indefinitely while the remaining hand grips). The car calmly holds instead of lurching.
+2. **Detection quality:** stickier MediaPipe thresholds + larger inference frames on GPU (480×360); camera requested at 960×720.
+3. **Driver aid:** forward-collision auto-brake assist (TTC-based, capped 0.7, relieved by deliberate evasion, player's own braking always wins) — an extension of ADR-008 easy-first: the game actively protects an unsupported player, and opting into risk (weaving toward cars) is still rewarded by the scoring systems.
+
+**Consequences.** Crashes now require sustained indifference rather than a moment's lost tracking. Near-miss scoring is unaffected (assist never steers and yields to evasion). The assist is a scored UX surface (AUTO-BRAKE chip + dev-HUD level), and it is NOT in the deterministic sim path — it lives in main's intent blend, keeping the sim's state-hash tests stable.

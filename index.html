@@ -28,8 +28,20 @@
       position: fixed; right: 50%; bottom: auto; transform: translateX(50%);
       top: 50%; transform: translate(50%, -40%);
     }
-    #pipwrap.wizard canvas { width: 480px; height: 360px; }
-    #pipwrap canvas { width: 240px; height: 180px; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,0.5); }
+    #pipwrap.wizard canvas { width: 640px; height: 480px; }
+    #pipwrap canvas { width: 330px; height: 248px; border-radius: 14px; box-shadow: 0 6px 28px rgba(0,0,0,0.55); }
+
+    /* ---- M7 hand-status glow + assist chip ---- */
+    #handGlow { position: fixed; inset: 0; pointer-events: none; z-index: 3; opacity: 0; transition: opacity 0.35s, box-shadow 0.35s; }
+    #handGlow.glow-hands { opacity: 1; box-shadow: inset 0 0 130px rgba(67, 209, 122, 0.3); }
+    #handGlow.glow-partial { opacity: 1; box-shadow: inset 0 0 120px rgba(255, 176, 31, 0.32); }
+    #handGlow.glow-lost { opacity: 1; box-shadow: inset 0 0 130px rgba(255, 60, 60, 0.3); animation: glowPulse 1.1s ease-in-out infinite; }
+    @keyframes glowPulse { 50% { box-shadow: inset 0 0 160px rgba(255, 60, 60, 0.45); } }
+    #hudAssist { position: absolute; right: 26px; bottom: 96px; padding: 4px 12px; border-radius: 999px;
+      font: 700 13px ui-monospace, monospace; letter-spacing: 0.14em; color: #ffd9a8;
+      background: rgba(120, 70, 10, 0.75); border: 1px solid rgba(255, 176, 31, 0.65);
+      opacity: 0; transition: opacity 0.2s; }
+    #hudAssist.on { opacity: 1; animation: glowPulse 0.9s ease-in-out infinite; }
     #wizardBody { white-space: pre; color: #cfd6e4; font-size: 15px; max-width: 520px; }
     #wizard { background: rgba(8, 10, 16, 0.9); cursor: default; gap: 10px; }
     #wizardBarWrap { width: 420px; max-width: 80vw; height: 10px; background: rgba(255,255,255,0.12); border-radius: 5px; overflow: hidden; }
@@ -118,8 +130,10 @@
       <span class="kmh" id="hudKmh">0</span><span class="kmh" style="font-size:18px;"> km/h</span><span class="gear" id="hudGear">N</span>
     </div>
     <div id="hudToasts"></div>
+    <div id="hudAssist">AUTO-BRAKE</div>
   </div>
 
+  <div id="handGlow"></div>
   <div id="pipwrap" class="hidden"><canvas id="pip"></canvas></div>
 
   <div id="overlay" class="overlay">

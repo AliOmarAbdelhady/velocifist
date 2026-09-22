@@ -25,6 +25,9 @@ import { PersistenceService } from './persist/local';
 import { CAM_MODES } from './render/cameraRig';
 import { GameAudio } from './audio/audio';
 import { QualityManager } from './core/quality';
+import { DemoHands } from './input/demoHands';
+import { forwardAssist, applyAssist, type AssistView } from './sim/assist';
+import type { TrackerLike } from './render/pip';
 
 const overlay = document.getElementById('overlay')!;
 const camchoice = document.getElementById('camchoice')!;
@@ -40,6 +43,10 @@ const pinnedTheme: ThemeId | null = urlTheme && THEME_ORDER.includes(urlTheme) ?
 let nextTheme: ThemeId = pinnedTheme ?? 'coastal';
 
 const persist = new PersistenceService();
+
+// ?pipdemo=1 — synthetic hands drive the real pipeline (AR demo / E2E)
+const pipdemo = new URLSearchParams(location.search).has('pipdemo');
+let demoHands: DemoHands | null = null;
 
 // Procedural audio (M6): created once, resumed on the first user gesture.
 const audio = GameAudio.create();
@@ -78,11 +85,16 @@ class Game {
   private nearMissTotal = 0;
   private crashTotal = 0;
   private coneHits = 0;
+  private lastHandStatus = '';
+  private handGlow: HTMLElement | null = null;
+  private readonly assistView: AssistView = { brake: 0, ttc: Infinity };
+  /** player's own brake BEFORE the assist blended in (chip gating) */
+  private playerBrakePreAssist = 0;
   /** dev backdoor (?smash=1): ghost truck that re-arms ahead after each hit */
   private smashAgent: import('./sim/trafficTypes').TrafficAgent | null = null;
 
   constructor(
-    private readonly getTracker: () => HandTracker | null,
+    private readonly getTracker: () => TrackerLike | null,
     private readonly getPip: () => PipRenderer | null,
     tune: CarTune,
     note?: string,
@@ -175,6 +187,20 @@ class Game {
       ? { steer: this.arbiter.intent.steer * 0.4, throttle: 0, brake: 0.35 }
       : this.arbiter.intent;
 
+    // EASY (M7): forward-collision mitigation coaxes the brakes when a
+    // closing agent is in the player's path — never steers, never slams
+    this.playerBrakePreAssist = intent.brake;
+    if (!wrecked) {
+      applyAssist(
+        intent,
+        forwardAssist(
+          this.car, intent, this.traffic.agents,
+          this.traffic.playerS, this.traffic.playerLat,
+          undefined, this.assistView,
+        ),
+      );
+    }
+
     this.car.step(dt, intent);
     this.traffic.update(dt, this.car, this.px, this.pz);
 
@@ -255,7 +281,15 @@ class Game {
     pip?.draw();
     audio?.updateEngine(this.car, frameDt);
     this.quality.observeFrame(frameDt * 1000);
-    if (this.phase !== 'results') this.hud.update(this.car, this.scoring, this.damage);
+    if (this.phase !== 'results') {
+      this.hud.update(this.car, this.scoring, this.damage);
+      this.hud.setAssist(
+        this.assistView.brake > 0.05 && this.assistView.brake > this.playerBrakePreAssist + 0.03
+          ? this.assistView.brake
+          : 0,
+      );
+      this.updateHandGlow(tracker);
+    }
 
     const pS = this.traffic.playerS;
     const chunk = Math.floor(pS / 256);
@@ -270,8 +304,8 @@ class Game {
       latG: this.car.ayLast / 9.81,
       camMode: CAM_MODES[this.scene.rig.mode],
       input: tracker
-        ? `${this.arbiter.source} ${st ? st.status : ''} ${tracker.info.latencyMs.toFixed(0)}ms ${tracker.info.delegate}`
-        : this.arbiter.source,
+        ? `${this.arbiter.source} ${st ? st.status : ''} ${tracker.info.latencyMs.toFixed(0)}ms ${tracker.info.delegate} · assist ${this.assistView.brake.toFixed(2)} · t${this.car.throttleIn.toFixed(2)} b${this.car.brakeIn.toFixed(2)}`
+        : `${this.arbiter.source} · assist ${this.assistView.brake.toFixed(2)} · t${this.car.throttleIn.toFixed(2)} b${this.car.brakeIn.toFixed(2)}`,
       traffic: `${this.nearMissTotal} near-miss · ${this.crashTotal} crashes · ${this.traffic.agents.filter((a) => a.active).length} cars`,
       world: `${this.themeName} · s ${pS.toFixed(0)} · chunk ${chunk} · ${zone} · gen ${this.road.maxBuildMs.toFixed(2)}ms${this.coneHits > 0 ? ` · cones ${this.coneHits}` : ''}`,
       quality: `${this.quality.mode === 'auto' ? 'auto' : 'pinned'} ${this.quality.level} · ema ${this.quality.emaMs.toFixed(1)} ms`,
@@ -279,6 +313,30 @@ class Game {
         ? `engine ${this.car.tune.id} · latency ${audio.latencyMs !== null ? `${audio.latencyMs.toFixed(1)} ms` : 'n/a'} · vol ${(persist.settings.volume * 100).toFixed(0)}%`
         : 'unavailable',
     });
+  }
+
+  /** Screen-edge glow + status toast tied to hand-tracking health (AR). */
+  private updateHandGlow(tracker: { solver: { state: { status: string } } } | null): void {
+    if (!this.handGlow) this.handGlow = document.getElementById('handGlow');
+    const el = this.handGlow;
+    if (!el) return;
+    const status = tracker?.solver.state.status ?? 'NO_CAMERA';
+    if (status !== this.lastHandStatus) {
+      if (this.lastHandStatus === 'HANDS_LOST' && status !== 'HANDS_LOST') {
+        this.hud.notify('HANDS BACK', 'pass');
+      } else if (status === 'HANDS_LOST' && this.phase === 'driving') {
+        this.hud.notify('HANDS LOST — holding the car', 'near');
+      }
+      this.lastHandStatus = status;
+    }
+    const cls =
+      status === 'TRACKING' ? 'glow-hands'
+      : status === 'HANDS_LOST' || status === 'NO_CAMERA' ? 'glow-lost'
+      : 'glow-partial';
+    if (!el.classList.contains(cls)) {
+      el.classList.remove('glow-hands', 'glow-partial', 'glow-lost');
+      el.classList.add(cls);
+    }
   }
 
   private onKey = (e: KeyboardEvent): void => {
@@ -363,6 +421,14 @@ function showGarage(): void {
 
 function chooseInput(tune: CarTune): void {
   audio?.init();
+  if (pipdemo) {
+    demoHands = new DemoHands();
+    demoHands.start();
+    pipwrap.classList.remove('hidden');
+    const pip = new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, demoHands);
+    launch(tune, () => demoHands, () => pip, 'pip demo — synthetic hands drive the real pipeline');
+    return;
+  }
   audio?.retune(tune);
   audio?.revBlip();
   camchoice.classList.remove('hidden');
@@ -467,7 +533,7 @@ function bootWithRecovery(tune: CarTune, initialTracker: HandTracker, initialPip
 
 function launch(
   tune: CarTune,
-  getTracker: (() => HandTracker | null) | null,
+  getTracker: (() => TrackerLike | null) | null,
   getPip: (() => PipRenderer | null) | null,
   note?: string,
 ): void {

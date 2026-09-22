@@ -26,13 +26,15 @@ export class DamageSystem {
   /** seconds since WRECKED — the flow uses this for the finale timeline */
   wreckTimer = -1;
   private readonly regenCapFrac: number;
+  /** M7 "very easy": 30 m/s head-on ≈ 44% of a 110 hp car (was 51%) */
+  private static readonly DMG_SCALE = 7.5;
 
   private readonly events: DamageEvent[] = Array.from({ length: 8 }, () => ({
     kind: 'HIT' as const, health: 0, state: 'PRISTINE' as HealthState, impulse: 0,
   }));
   private eventCount = 0;
 
-  constructor(healthMax: number, regenCapFrac = 0.35) {
+  constructor(healthMax: number, regenCapFrac = 0.45) {
     this.healthMax = healthMax;
     this.health = healthMax;
     this.regenCapFrac = regenCapFrac;
@@ -75,10 +77,10 @@ export class DamageSystem {
     return this.events.slice(0, this.eventCount);
   }
 
-  /** dmg = k·(J/Jref)^1.4 (PLAN §9). k tuned: 30 m/s head-on ≈ half health. */
+  /** dmg = k·(J/Jref)^1.4 (PLAN §9), k softened in M7 (very-easy directive). */
   private rawDamage(closing: number): number {
     if (closing <= 0.5) return 0;
-    return 9 * Math.pow(closing / 8, 1.4);
+    return DamageSystem.DMG_SCALE * Math.pow(closing / 8, 1.4);
   }
 
   private refreshState(): void {

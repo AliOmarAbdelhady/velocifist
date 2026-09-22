@@ -100,8 +100,15 @@ export class HandTracker {
     this.info.error = null;
     this.lostFired = false;
     try {
+      // ask for a crisp source (driver-facing); the pump downscales to the
+      // delegate-appropriate inference size — better landmarks at distance
       this.stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' },
+        video: {
+          width: { ideal: 960 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 },
+          facingMode: 'user',
+        },
         audio: false,
       });
     } catch (err) {
@@ -183,10 +190,13 @@ export class HandTracker {
       if (this.video.readyState >= 2 && !this.pending && this.worker) {
         this.pending = true;
         try {
+          // GPU delegate gets a bigger inference frame (better detection at
+          // distance / poor light); CPU stays small to hold frame rate
+          const big = this.info.delegate === 'GPU';
           const bitmap = await createImageBitmap(this.video, {
-            resizeWidth: 320,
-            resizeHeight: 240,
-            resizeQuality: 'low',
+            resizeWidth: big ? 480 : 320,
+            resizeHeight: big ? 360 : 240,
+            resizeQuality: big ? 'medium' : 'low',
           });
           const ts = performance.now();
           this.worker.postMessage({ type: 'frame', ts, bitmap }, [bitmap]);

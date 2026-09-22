@@ -22,6 +22,7 @@ export class GameHud {
   private readonly healthLabel: HTMLElement;
   private readonly healthFill: HTMLElement;
   private readonly toasts: HTMLElement;
+  private readonly assistChip: HTMLElement;
   private lastScore = -1;
   private lastKmh = -1;
   private lastGear = -1;
@@ -37,6 +38,21 @@ export class GameHud {
     this.healthLabel = document.getElementById('hudHealthLabel')!;
     this.healthFill = document.getElementById('hudHealthFill')!;
     this.toasts = document.getElementById('hudToasts')!;
+    this.assistChip = document.getElementById('hudAssist')!;
+  }
+
+  /** AUTO-BRAKE chip while the forward-collision assist is engaging. */
+  setAssist(level: number): void {
+    this.assistChip.classList.toggle('on', level > 0.05);
+  }
+
+  /** Small transient notification (hand-status etc.). */
+  notify(text: string, cls = ''): void {
+    const el = document.createElement('div');
+    el.className = `toast ${cls}`;
+    el.textContent = text;
+    this.toasts.append(el);
+    setTimeout(() => el.remove(), 1500);
   }
 
   show(visible: boolean): void {

@@ -51,12 +51,13 @@ describe('states', () => {
     const d = new DamageSystem(100);
     expect(d.state).toBe('PRISTINE');
     expect(d.powerScale).toBe(1);
-    d.update(DT, [22], 0); // ~36 dmg
+    d.update(DT, [25], 0); // ~37 dmg (M7 softer curve, k=7.5)
     expect(d.state).toBe('DAMAGED');
-    d.update(DT, [35], 0); // ~71 dmg, merged at 50% inside the window
+    d.update(DT, [40], 0); // merged at 50% inside the window
     expect(d.state).toBe('CRITICAL');
     expect(d.powerScale).toBeCloseTo(0.92, 6);
     expect(d.wrecked).toBe(false);
+    for (let i = 0; i < 60; i++) d.update(DT, [], 0); // window expires
     d.update(DT, [30], 0);
     expect(d.state).toBe('WRECKED');
     expect(d.wrecked).toBe(true);
@@ -67,10 +68,10 @@ describe('states', () => {
 
   it('FLOW regen recovers CRITICAL → DAMAGED but never past 35%', () => {
     const d = new DamageSystem(100);
-    d.update(DT, [35], 0); // ~29 left → CRITICAL
+    d.update(DT, [40], 0); // ~29 left → CRITICAL
     expect(d.state).toBe('CRITICAL');
     for (let i = 0; i < 60 * 60; i++) d.update(DT, [], 0.5 * DT);
-    expect(d.health).toBeCloseTo(35, 4); // capped
+    expect(d.health).toBeCloseTo(45, 4); // capped (M7: 45%)
     expect(d.state).toBe('DAMAGED'); // recovered a tier
   });
 

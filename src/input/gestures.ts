@@ -47,13 +47,13 @@ export const DEFAULT_GESTURE_CONFIG: GestureConfig = {
   fistOff: 0.52,
   voteWindow: 5,
   voteMin: 3,
-  wheelDeadzoneDeg: 25,
+  wheelDeadzoneDeg: 28,
   wheelLockDeg: 100,
   wheelCurveExp: 1.35,
-  wheelRateDeg: 500,
+  wheelRateDeg: 430,
   zoneRadiusFactor: 1.8,
   regripWindow: 1.2,
-  handsLostGrace: 0.4,
+  handsLostGrace: 0.9,
   autoHoldBrake: 0.35,
   throttleRamp: 3,
   brakeRamp: 4,
@@ -144,6 +144,8 @@ export interface SolverState {
   zoneAuthority: number;
   confidence: number;
   latencyHintMs: number;
+  /** seconds since both hands were confidently seen (AR countdown / glow) */
+  handsAgeS: number;
 }
 
 export class GestureSolver {
@@ -212,6 +214,7 @@ export class GestureSolver {
       zoneAuthority: this.zone,
       confidence: this.conf,
       latencyHintMs: 0,
+      handsAgeS: this.tPrev - this.lastSeenTime,
     };
   }
 
@@ -331,6 +334,10 @@ export class GestureSolver {
     const noFist = !this.fistStateL && !this.fistStateR;
     if (inDrive) this.lastDriveTime = t;
     const regrip = oneFist && t - this.lastDriveTime < this.cfg.regripWindow;
+    // ROBUSTNESS (M7): one hand dropped out of frame while the other still
+    // grips → HOLD everything. Detection flicker must not cut the throttle;
+    // the missing hand was not "opened" (that would be a deliberate brake).
+    const partialHold = oneFist && (!pair.left || !pair.right);
 
     if (handsLost) {
       // AUTO-HOLD: lift throttle, gentle brake, hold/decay steering
@@ -339,8 +346,9 @@ export class GestureSolver {
     } else if (inDrive) {
       this.intent.brake = approach(this.intent.brake, 0, 5 * dt);
       this.intent.throttle = approach(this.intent.throttle, 1, this.cfg.throttleRamp * dt);
-    } else if (regrip) {
-      // one palm opened mid-corner (hand-over-hand): hold everything
+    } else if (regrip || partialHold) {
+      // one palm opened mid-corner (hand-over-hand) or one hand flickered
+      // out of frame: hold everything
     } else if (noFist && both) {
       // both palms intentionally open → brake
       this.intent.throttle = Math.max(0, this.intent.throttle - 5 * dt);

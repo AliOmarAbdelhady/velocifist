@@ -167,6 +167,18 @@ describe('pedal FSM (regrip-aware)', () => {
     expect(s.intent.throttle).toBe(0);
   });
 
+  it('M7 ROBUSTNESS: one hand flickering out of frame HOLDS the throttle (no cut)', () => {
+    const s = solver();
+    for (let i = 0; i < 90; i++) s.update(pair(makeFist(A_L, 0), makeFist(A_R, 1)), i / 30);
+    const held = s.intent.throttle;
+    expect(held).toBeGreaterThan(0.9);
+    // right hand drops out of frame for 3 s — detection flicker, NOT a brake
+    for (let i = 0; i < 90; i++) s.update(pair(makeFist(A_L, 0), null), 3 + i / 30);
+    expect(s.state.status).toBe('PARTIAL');
+    expect(s.intent.throttle).toBeGreaterThan(0.85);
+    expect(s.intent.brake).toBeLessThan(0.05);
+  });
+
   it('hands lost → AUTO-HOLD (gentle brake, status flag)', () => {
     const s = solver();
     for (let i = 0; i < 90; i++) s.update(pair(makeFist(A_L, 0), makeFist(A_R, 1)), i / 30);

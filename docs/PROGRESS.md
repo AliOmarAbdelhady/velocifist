@@ -127,3 +127,10 @@
 - **Wiring:** CarView update from Car (brake/throttle/offroad fields), NearMissEvent.side, CrashEvent.x/z for spark anchors, damage-state plumbing into car + FX, audio lifecycle across run/retry/results, floating-origin fx.rebase.
 - **Robustness:** camera-rig spring substepping (was divergent on slow frames — QA-caught), favicon 404 silenced.
 - **Verification:** 150/150 tests (25 new: quality/autoscaler, audio curves, damage visuals, grade data); build green; headless-Chrome E2E (`scripts/e2e-m6.mjs` + `?smash=1` backdoor) drives → 216 km/h → near-miss whooshes → crash chain (sparks/smoke/screenshots confirmed by QA subagent: 5 PASS / 1 PASS-WITH-ISSUES resolved by streak retune) → WRECKED → results with audit table; 0 console errors. IAB pane was occluded this session → headless path (PILL 072).
+
+### Session 9 (2026-09-23, M7 re-scope) — hands & AR pass (user directives: better detection, very easy, enhanced AR)
+- **Detection:** arbiter EMA + hysteresis (flicker no longer cuts the car — PILL 074), PARTIAL-hold for one-hand flicker, sticky MediaPipe thresholds, 480×360 GPU inference from a 960×720 request, longer lost-grace (0.9 s) with gentler auto-hold.
+- **Very easy:** forward-collision auto-brake assist (TTC model, steer relief, 0.7 cap, AUTO-BRAKE chip), damage k 7.5 + regen cap 45%, softer guardrail, stronger lane-keep (PILL 080). Live proof: repeated full-speed ghost-truck encounters left the car PRISTINE.
+- **AR:** PiP rewritten as an AR dashboard (skeletons with grip arcs + trails, rocker wheel with hand orbs + chevrons, pedal meters, gesture banner, pulsing status ring), screen-edge hand glow, hand-status toasts, bigger panel. `?pipdemo=1` drives the whole game with synthetic hands through the real pipeline.
+- **Verification:** 170/170 tests (arbiter/assist/demo/banner suites + PARTIAL-hold gate); E2E `scripts/e2e-m7.mjs` three runs green (demo autonomy + glow cycle; assist chase peak 0.70 + chip; fake-camera worker READY + lost UX), 0 console errors; visual QA subagent pass (glow visibility fixed from its findings).
+- Docs: PLAN v1.4 (M7 re-scope), ADR-010.

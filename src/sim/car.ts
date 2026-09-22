@@ -158,12 +158,12 @@ export class Car {
       // EASY: lane-keep assist — steer toward the road heading ahead plus a
       // gentle centre-line pull. Full strength with quiet hands (|steer| <
       // 0.4), faded to 35% when the player is deliberately steering.
-      this.guide.sample(CAR_PROJ.s + 12 + 0.22 * Math.abs(this.u), CAR_SPINE);
+      this.guide.sample(CAR_PROJ.s + 14 + 0.24 * Math.abs(this.u), CAR_SPINE);
       let dh = CAR_SPINE.heading - this.heading;
       while (dh > Math.PI) dh -= 2 * Math.PI;
       while (dh < -Math.PI) dh += 2 * Math.PI;
-      dh += clamp(-latSigned * 0.035, -0.12, 0.12); // drift back to centre
-      const k = 0.55 * (Math.abs(intent.steer) < 0.4 ? 1 : 0.35);
+      dh += clamp(-latSigned * 0.045, -0.14, 0.14); // drift back to centre
+      const k = 0.7 * (Math.abs(intent.steer) < 0.4 ? 1 : 0.35);
       target = clamp(target + clamp(k * dh, -0.3, 0.3), -dMax * 1.15, dMax * 1.15);
     }
     const rate = t.steerRate * dt;
@@ -266,9 +266,9 @@ export class Car {
       } else {
         this.x = Math.sign(this.x) * wall;
       }
-      this.w *= -0.15; // EASY: guardrail grazes scrub speed gently
-      this.u *= 0.985;
-      this.omega *= 0.5;
+      this.w *= -0.12; // EASY: guardrail grazes scrub speed gently
+      this.u *= 0.99;
+      this.omega *= 0.45;
     }
 
     // derived state
