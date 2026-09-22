@@ -12,6 +12,7 @@ export interface HudInfo {
   latG: number;
   camMode: string;
   input: string;
+  traffic: string;
 }
 
 export class DevHud {
@@ -43,6 +44,7 @@ export class DevHud {
       `${info.carName}  g${info.gear}  rpm ${(info.rpmNorm * 100).toFixed(0)}%\n` +
       `β ${info.betaDeg.toFixed(1)}°   lat ${info.latG.toFixed(2)} g   cam ${info.camMode}\n` +
       `in   ${info.input}\n` +
+      `trf  ${info.traffic}\n` +
       `cars 1/2/3 · cam C${this.noteText ? `\n${this.noteText}` : ''}`;
   }
 }

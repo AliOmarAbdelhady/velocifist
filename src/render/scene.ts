@@ -6,9 +6,11 @@
 
 import * as THREE from 'three';
 import type { Car, CarTune } from '../sim/car';
+import type { TrafficSystem } from '../sim/traffic';
 import { CarView, type CarPose } from './carView';
 import { CameraRig } from './cameraRig';
 import { Cones } from './cones';
+import { TrafficRenderer } from './trafficRender';
 
 const ROAD_W = 24;
 const ROAD_LEN = 640;
@@ -54,6 +56,7 @@ export class GameScene {
   readonly rig: CameraRig;
   private readonly carView: CarView;
   private readonly cones = new Cones();
+  private readonly trafficView = new TrafficRenderer();
   private readonly road: THREE.Mesh;
   private readonly roadTex: THREE.CanvasTexture;
   private readonly followers: THREE.Object3D[] = [];
@@ -108,6 +111,7 @@ export class GameScene {
     this.carView = new CarView(tune);
     this.scene.add(this.carView.group);
     this.scene.add(this.cones.object);
+    this.scene.add(this.trafficView.group);
 
     this.camera = new THREE.PerspectiveCamera(
       50,
@@ -128,7 +132,7 @@ export class GameScene {
     this.rig.cycle();
   }
 
-  update(pose: CarPose, car: Car, frameDt: number): void {
+  update(pose: CarPose, car: Car, traffic: TrafficSystem | null, frameDt: number, timeSec: number): void {
     this.carView.update(
       pose,
       car.u,
@@ -146,6 +150,7 @@ export class GameScene {
     this.roadTex.offset.y = (car.distance / TILE_M) % 1;
 
     this.cones.update(pose.z);
+    if (traffic) this.trafficView.sync(traffic.agents, timeSec);
 
     this.rig.update(
       frameDt,

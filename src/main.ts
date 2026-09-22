@@ -7,6 +7,7 @@
 import { createLoop } from './core/loop';
 import { Car } from './sim/car';
 import { CAR_TUNES } from './sim/carTunes';
+import { TrafficSystem } from './sim/traffic';
 import { createKeyboard } from './input/keyboard';
 import { InputArbiter } from './input/arbiter';
 import { HandTracker } from './input/handTracker';
@@ -144,6 +145,9 @@ function startLoop(
   const arbiter = new InputArbiter();
   const gameScene = new GameScene(CAR_TUNES[0]);
   const hud = new DevHud();
+  const traffic = new TrafficSystem();
+  let nearMissTotal = 0;
+  let crashTotal = 0;
   if (note) hud.note(note);
 
   const switchCar = (index: number): void => {
@@ -180,6 +184,7 @@ function startLoop(
       pz = car.z;
       ph = car.heading;
       car.step(dt, arbiter.intent);
+      traffic.update(dt, car, px, pz);
     },
     render(alpha, frameDt) {
       const tracker = getTracker();
@@ -189,8 +194,15 @@ function startLoop(
         z: pz + (car.z - pz) * alpha,
         heading: ph + (car.heading - ph) * alpha,
       };
-      gameScene.update(pose, car, frameDt);
+      gameScene.update(pose, car, traffic, frameDt, performance.now() / 1000);
       pip?.draw();
+      for (const nm of traffic.takeNearMisses()) {
+        if (nm.tier === 'INCHES' || nm.tier === 'VERY_CLOSE' || nm.tier === 'NEAR') nearMissTotal++;
+      }
+      for (const c of traffic.takeCrashes()) {
+        void c;
+        crashTotal++;
+      }
       const st = tracker?.solver.state;
       hud.update(frameDt, gameScene.renderer, car.u, car.x, {
         carName: car.tune.name,
@@ -202,6 +214,7 @@ function startLoop(
         input: tracker
           ? `${arbiter.source} ${st ? st.status : ''} ${tracker.info.latencyMs.toFixed(0)}ms ${tracker.info.delegate}`
           : arbiter.source,
+        traffic: `${nearMissTotal} near-miss · ${crashTotal} crashes · ${traffic.agents.filter((a) => a.active).length} cars`,
       });
     },
   });

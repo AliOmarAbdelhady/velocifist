@@ -2,9 +2,9 @@
 
 > Updated at the end of every work session. ✅ done · 🔶 partial · ⬜ not started.
 
-**Last updated:** 2026-09-22 (M2 session 3 — code-complete)
-**Current milestone:** M2 ⭐ — Hand-tracking core 🔶 (all scripted gates green 56/56; **live camera validation on user's machine pending**)
-**Next step:** user runs `npm run dev` → allow camera → calibrate → reports wizard mean-error + latency + feel; then "continue" → M3 (traffic + swept collision + near-miss detection)
+**Last updated:** 2026-09-22 (M3 session 4 — complete)
+**Current milestone:** M3 — Traffic & Collision ✅ (73/73 tests incl. 60-min fairness soak; live feel pending user run)
+**Next step:** user plays with traffic (`npm run dev`, port 5173 — not 5199); then "continue" → M4 (world streaming + 3 environments)
 
 ## Milestones
 
@@ -13,7 +13,7 @@
 | M0 | Foundation: repo, Vite+TS, fixed-timestep loop, placeholder scene+car, dev HUD, tests | ✅ done | automated gates green; 60 FPS needs user's eyes |
 | M1 | Vehicle physics + chase camera feel | ✅ done | 30/30 validation tests; fun panel on user |
 | M2 ⭐ | Hand-tracking core (worker, MediaPipe, gestures, calibration) | 🔶 code-complete | scripted gates 56/56; live camera half = user |
-| M3 | Traffic AI + swept collision + near-miss detection | ⬜ | |
+| M3 | Traffic AI + swept collision + near-miss detection | ✅ done | soak 0 violations; 73/73 |
 | M4 | World streaming + 3 environments | ⬜ | |
 | M5 | Scoring/damage/persistence/garage | ⬜ | |
 | M6 | Art + audio pass, quality tiers | ⬜ | |
@@ -70,6 +70,11 @@
 - [x] Flow wiring: camera explainer → wizard → drive; keyboard-only fallback path; HUD input line
 - [x] Tests 56/56 · build green (130.9 kB gzip main + 144 kB worker; assets verified in dist)
 - [ ] **LIVE GATES (user, PLAN §5.9):** wizard mean error, latency readout, crossing feel, false-brake feel, dropout grace — report back for tuning
+
+### Session 5 (2026-09-22, M3) — traffic + collision complete
+- TrafficSystem, collision, near-miss, instanced renderer, wiring; 73/73 (17 new).
+- Real bugs caught: empty event rings, player-state copy mutation, ahead/behind inversion, invisible yaw gain (PILL 041).
+- Fairness soak: 60 sim-minutes, escape invariant 0 violations.
 
 ### Session 4 (2026-09-22, hotfix 2) — worker wasm loading fixed for dev (blob + module glue, GPU-verified in browser); mute grace; camlost overlay at startup; handling rework: downforce + soft falloff + steer fade + ESC-lite (56/56 green).
 
