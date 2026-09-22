@@ -11,16 +11,22 @@ export interface HudInfo {
   betaDeg: number;
   latG: number;
   camMode: string;
+  input: string;
 }
 
 export class DevHud {
   private readonly el: HTMLElement;
   private acc = 0;
   private emaMs = 16.7;
+  private noteText = '';
 
   constructor() {
     this.el = document.getElementById('devhud')!;
     this.el.hidden = false;
+  }
+
+  note(msg: string): void {
+    this.noteText = msg;
   }
 
   update(frameDt: number, renderer: WebGLRenderer, speedMs: number, x: number, info: HudInfo): void {
@@ -36,6 +42,7 @@ export class DevHud {
       `spd  ${(speedMs * 3.6).toFixed(0)} km/h   x ${x.toFixed(2)} m\n` +
       `${info.carName}  g${info.gear}  rpm ${(info.rpmNorm * 100).toFixed(0)}%\n` +
       `β ${info.betaDeg.toFixed(1)}°   lat ${info.latG.toFixed(2)} g   cam ${info.camMode}\n` +
-      `cars 1/2/3 · cam C`;
+      `in   ${info.input}\n` +
+      `cars 1/2/3 · cam C${this.noteText ? `\n${this.noteText}` : ''}`;
   }
 }

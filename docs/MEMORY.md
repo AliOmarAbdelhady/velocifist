@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-09-22 — M2 session 3 (hand-tracking core)
+
+- **PILL 022 · M2 DONE (code-complete, live hardware validation pending user):** `tracker.worker.ts` (MediaPipe HandLandmarker GPU→CPU fallback, OffscreenCanvas 320×240, single-flight frames), `handTracker.ts` (camera + ImageBitmap pump + rVFC, mirroring, latency EMA, seconds clock), `handTracks.ts` (crossing-safe identity + `swap()`), `gestures.ts` (grip metric, magnitude-gated wheel, regrip FSM, calibration, AUTO-HOLD), `oneEuro.ts`, `arbiter.ts`, `pip.ts` (mirror video + skeleton + live wheel sprite + grip glows + pedal bars + latency), `calibrationWizard.ts` (side-fix → 75-frame anchor capture → 6 s practice with mean-error readout). 56/56 tests; build 130.9 kB gzip main + 144 kB worker.
+- **PILL 023 · CRITICAL WHEEL MATH:** the displacement formulation `v = (R−aR) − (L−aL)` has a **singularity at neutral** — atan2 of two ~0 components returns ±90°+ from float noise → wheel slams to lock at rest. Fix: soft magnitude gate on `|v|/shoulderRef` (0.105→0.175 rad ≈ 6°–10° wheel) BEFORE the angle counts. Dead zone on angle alone is not enough.
+- **PILL 024 · CURL GEOMETRY:** finger curl = angle(PIP−MCP, TIP−PIP)/π — extended ≈ 0° → curl 0, folded ≈ 180° → curl 1. Writing `1 − angle/π` inverts it (open palm = "fist"). Caught while designing synthetic fixtures — write fixtures BEFORE trusting a metric.
+- **PILL 025 · HANDEDNESS AMBIGUITY KILL:** after mirroring, the physically-left hand has smaller x — `HandTracker.ensureSides()` swaps identities if `left.x > right.x` at calibration, so MediaPipe label conventions can never invert the wheel. Labels are used only for the initial lock, never again.
+- **PILL 026 · FIXTURES:** `tests/helpers/handFixture.ts` builds synthetic 21-landmark hands (curl, thumb, scale, position). Fist grip ≈ 0.92, open ≈ 0.10 — wide margins vs thresholds 0.72/0.35. Grip is scale-invariant (handScale normalization).
+- **PILL 027 · VENDORED ASSETS:** `public/vendor/mediapipe/wasm` (copied from node_modules @mediapipe/tasks-vision@1.0.1) + `public/models/hand_landmarker.task` (7.8 MB float16). Fully offline after first load. If tasks-vision is upgraded, RE-COPY the wasm dir.
+- **PILL 028 · M2 v1 CHOICES (revisit M8):** steering requires both hands (single-hand mode parked for the accessibility pass); identity holdover 150 ms anti-flicker; solver seconds-clock derives from first camera frame (performance.now base); latency shown is capture→intent (add ~1 frame for input→pixels).
+- **PILL 029 · GATES STILL OPEN (M2 live half):** steering sign correct in real crossing, median error < 5°/p95 < 12° vs wheel reference, false-brake < 1% live, latency < 120 ms p95, graceful dropout — user runs `npm run dev`, wizard prints mean tracking error; report numbers back for tuning.
+
 ## 2026-09-22 — M1 session 2 (vehicle dynamics + camera feel)
 
 - **PILL 014 · M1 DONE:** Bicycle-model `src/sim/car.ts` (slip angles, simplified Pacejka, grip circle per axle, longitudinal weight transfer, speed-sensitive steering, counter-steer assist, soft wall, off-road grip 0.55). 3 car tunes as JSON (`src/sim/cars/`). CameraRig (CHASE/HOOD/FAR spring arm, speed FOV 50→78, look-ahead biased into steer, micro-shake ∝ v², reduced-motion aware). CarView (roll/pitch spring visuals, rolling + steering front wheels). Cones (seeded instanced slalom, hashRng). Validation protocol = 30/30 tests green; build 124.9 kB gzip.

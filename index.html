@@ -8,31 +8,69 @@
     html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e14; }
     #app { position: fixed; inset: 0; }
     canvas { display: block; }
-    #overlay {
+    .overlay {
       position: fixed; inset: 0; z-index: 10; cursor: pointer; user-select: none;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
       background: rgba(8, 10, 16, 0.84); color: #e8ecf4;
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Segoe UI', system-ui, sans-serif; text-align: center;
     }
-    #overlay h1 { font-size: 64px; letter-spacing: 0.14em; margin: 0; color: #ff5a1f; text-transform: uppercase; }
-    #overlay .tag { color: #9aa4b8; letter-spacing: 0.1em; margin: 0; }
-    #overlay .keys { color: #d7dee9; font-size: 15px; margin: 0; }
+    #overlay h1, #wizardTitle { font-size: 56px; letter-spacing: 0.14em; margin: 0; color: #ff5a1f; text-transform: uppercase; }
+    .tag { color: #9aa4b8; letter-spacing: 0.1em; margin: 0; }
+    .keys { color: #d7dee9; font-size: 15px; margin: 0; }
     #devhud {
       position: fixed; top: 10px; left: 10px; z-index: 5; pointer-events: none; white-space: pre;
       font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace; color: #9fe870;
       background: rgba(0, 0, 0, 0.45); padding: 8px 10px; border-radius: 6px;
     }
+    #pipwrap { position: fixed; right: 14px; bottom: 14px; z-index: 4; pointer-events: none; }
+    #pipwrap.wizard {
+      position: fixed; right: 50%; bottom: auto; transform: translateX(50%);
+      top: 50%; transform: translate(50%, -40%);
+    }
+    #pipwrap.wizard canvas { width: 480px; height: 360px; }
+    #pipwrap canvas { width: 240px; height: 180px; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,0.5); }
+    #wizardBody { white-space: pre; color: #cfd6e4; font-size: 15px; max-width: 520px; }
+    #wizard { background: rgba(8, 10, 16, 0.9); cursor: default; gap: 10px; }
+    #wizardBarWrap { width: 420px; max-width: 80vw; height: 10px; background: rgba(255,255,255,0.12); border-radius: 5px; overflow: hidden; }
+    #wizardBar { height: 100%; width: 0%; background: linear-gradient(90deg, #ff5a1f, #ffb01f); }
+    #camchoice button {
+      font: 600 16px 'Segoe UI', system-ui, sans-serif; color: #0b0e14; background: #ff5a1f;
+      border: 0; border-radius: 8px; padding: 14px 26px; margin: 8px; cursor: pointer;
+    }
+    #camchoice button.secondary { background: #3a4356; color: #e8ecf4; }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <div id="app"></div>
   <div id="devhud" hidden></div>
-  <div id="overlay">
+
+  <div id="pipwrap" class="hidden"><canvas id="pip"></canvas></div>
+
+  <div id="overlay" class="overlay">
     <h1>Velocifist</h1>
     <p class="tag">WEAVE TRAFFIC WITH YOUR BARE HANDS</p>
-    <p class="keys">M0 keyboard mule — W/S throttle &amp; brake · A/D steer · hand tracking arrives in M2</p>
+    <p class="keys">M2 — hand tracking online: fists = throttle · open = brake · cross hands for lock</p>
+    <p class="keys">keyboard always works: W/S · A/D · C camera · 1/2/3 car</p>
     <p class="keys">CLICK TO START</p>
   </div>
+
+  <div id="camchoice" class="overlay hidden">
+    <h1 style="font-size: 34px;">Enable the camera?</h1>
+    <p class="tag" style="max-width: 460px;">Hand tracking runs 100% locally in your browser — the video never leaves this machine. Nothing is recorded or uploaded.</p>
+    <div>
+      <button id="btnCam">Enable camera &amp; calibrate</button>
+      <button id="btnKb" class="secondary">Keyboard only</button>
+    </div>
+  </div>
+
+  <div id="wizard" class="overlay hidden">
+    <div id="wizardTitle">CALIBRATION</div>
+    <div id="pipMount"></div>
+    <div id="wizardBody"></div>
+    <div id="wizardBarWrap"><div id="wizardBar"></div></div>
+  </div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

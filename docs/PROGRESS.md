@@ -2,9 +2,9 @@
 
 > Updated at the end of every work session. ✅ done · 🔶 partial · ⬜ not started.
 
-**Last updated:** 2026-09-22 (M1 session 2 — complete)
-**Current milestone:** M1 — Vehicle & Camera Feel ✅ (automated gates green; user fun-panel + 60 FPS eyeball pending)
-**Next step:** user says "continue" → M2 ⭐ (hand-tracking core: worker + MediaPipe + gestures + calibration)
+**Last updated:** 2026-09-22 (M2 session 3 — code-complete)
+**Current milestone:** M2 ⭐ — Hand-tracking core 🔶 (all scripted gates green 56/56; **live camera validation on user's machine pending**)
+**Next step:** user runs `npm run dev` → allow camera → calibrate → reports wizard mean-error + latency + feel; then "continue" → M3 (traffic + swept collision + near-miss detection)
 
 ## Milestones
 
@@ -12,7 +12,7 @@
 |---|---|---|---|
 | M0 | Foundation: repo, Vite+TS, fixed-timestep loop, placeholder scene+car, dev HUD, tests | ✅ done | automated gates green; 60 FPS needs user's eyes |
 | M1 | Vehicle physics + chase camera feel | ✅ done | 30/30 validation tests; fun panel on user |
-| M2 ⭐ | Hand-tracking core (worker, MediaPipe, gestures, calibration) | ⬜ | highest risk, done early |
+| M2 ⭐ | Hand-tracking core (worker, MediaPipe, gestures, calibration) | 🔶 code-complete | scripted gates 56/56; live camera half = user |
 | M3 | Traffic AI + swept collision + near-miss detection | ⬜ | |
 | M4 | World streaming + 3 environments | ⬜ | |
 | M5 | Scoring/damage/persistence/garage | ⬜ | |
@@ -57,7 +57,26 @@
 - [x] Validation protocol tests (§6.3): 0–100, 100–0, cornering g, yaw overshoot, slalom, vMax, determinism, 10-min abuse — **30/30 green**
 - [x] `npm run build` green — 124.9 kB gzip
 
-### Session log — Session 2 (2026-09-22, M1)
+### M2 checklist (session 3)
+
+- [x] `@mediapipe/tasks-vision` installed; wasm + 7.8 MB float16 model vendored (offline-first)
+- [x] `oneEuro.ts` + tests (jitter, lag, adaptivity, reset)
+- [x] `handTracks.ts` identity tracker + `swap()` + tests (crossing with label flip, dropout, teleport)
+- [x] `gestures.ts` — grip metric, magnitude-gated wheel, regrip FSM, calibration capture, AUTO-HOLD + 18 tests (sign rules, dead zone, lock clamp, monotonic, zone gating, false-brake gate <1%)
+- [x] `arbiter.ts` hands⊕keyboard
+- [x] `tracker.worker.ts` (GPU→CPU fallback, single-flight) + `handTracker.ts` (mirroring, latency EMA, side-fix)
+- [x] `pip.ts` AR overlay (mirror, skeleton, live wheel sprite, grip glows, pedals, status)
+- [x] `calibrationWizard.ts` (side-fix → anchors → practice with mean-error)
+- [x] Flow wiring: camera explainer → wizard → drive; keyboard-only fallback path; HUD input line
+- [x] Tests 56/56 · build green (130.9 kB gzip main + 144 kB worker; assets verified in dist)
+- [ ] **LIVE GATES (user, PLAN §5.9):** wizard mean error, latency readout, crossing feel, false-brake feel, dropout grace — report back for tuning
+
+### Session log — Session 3 (2026-09-22, M2)
+
+- 2 more real bugs caught by tests/fixture design: inverted finger-curl formula (PILL 024) and the wheel-at-neutral atan2 singularity → magnitude gate (PILL 023); plus tracker lock-on frame now resolves immediately, and physical-side swap() kills handedness ambiguity forever (PILL 025).
+- Fixed 2 test-side errors: fistAt rotation sign convention, dead-zone wiggle 10× larger than real jitter.
+
+### Session 2 (2026-09-22, M1)
 
 - **3 real physics bugs found & fixed by the validation gates:**
   1. Tire curve written `sin(B·atan(C·α))` — collapses/oscillates past ~7° slip ⇒ every slide spun the car. Correct classic form is `sin(C·atan(B·α))` (PILL 015).
