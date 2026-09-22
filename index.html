@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VELOCIFIST</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e14; }
+    #app { position: fixed; inset: 0; }
+    canvas { display: block; }
+    #overlay {
+      position: fixed; inset: 0; z-index: 10; cursor: pointer; user-select: none;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+      background: rgba(8, 10, 16, 0.84); color: #e8ecf4;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    #overlay h1 { font-size: 64px; letter-spacing: 0.14em; margin: 0; color: #ff5a1f; text-transform: uppercase; }
+    #overlay .tag { color: #9aa4b8; letter-spacing: 0.1em; margin: 0; }
+    #overlay .keys { color: #d7dee9; font-size: 15px; margin: 0; }
+    #devhud {
+      position: fixed; top: 10px; left: 10px; z-index: 5; pointer-events: none; white-space: pre;
+      font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace; color: #9fe870;
+      background: rgba(0, 0, 0, 0.45); padding: 8px 10px; border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="devhud" hidden></div>
+  <div id="overlay">
+    <h1>Velocifist</h1>
+    <p class="tag">WEAVE TRAFFIC WITH YOUR BARE HANDS</p>
+    <p class="keys">M0 keyboard mule — W/S throttle &amp; brake · A/D steer · hand tracking arrives in M2</p>
+    <p class="keys">CLICK TO START</p>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
