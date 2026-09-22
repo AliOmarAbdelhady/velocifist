@@ -32,6 +32,8 @@ export interface CarTune {
   /** tire curve shape (shared per axle for now) */
   stiffB: number;
   stiffC: number;
+  /** aero grip bonus at vMax, e.g. 0.2 = +20% lateral grip at top speed */
+  downforce: number;
   /** max road-wheel steer at standstill, rad */
   deltaMax: number;
   /** speed at which steering authority halves, m/s */
@@ -103,18 +105,21 @@ export class Car {
   step(dt: number, intent: DriverIntent): void {
     const t = this.tune;
 
-    // ---- surface ----
+    // ---- surface + aero ----
     const offRoad = Math.abs(this.x) > t.roadHalfWidth;
     const gripScale = offRoad ? 0.55 : 1;
+    // downforce: supercars literally stick more the faster they go
+    const speedFrac = Math.min(1, Math.abs(this.u) / t.vMax);
+    const aero = 1 + t.downforce * speedFrac * speedFrac;
 
     // ---- steering: speed-sensitive range, slew-limited, slide assist ----
     const dMax = t.deltaMax / (1 + Math.abs(this.u) / t.steerFadeSpeed);
     let target = clamp(intent.steer, -1, 1) * dMax;
-    // counter-steer assist (PLAN §6.2 "subtle"): only when the rear axle is
-    // genuinely saturated AND the body is sliding hard — never during normal
-    // cornering (β is naturally nonzero there). Uses last step's saturation.
-    if (this.rearSlip > 0.9 && Math.abs(this.beta) > 0.2) {
-      target = clamp(target + 0.35 * this.beta * dMax, -dMax, dMax);
+    if (this.rearSlip > 0.78 && Math.abs(this.beta) > 0.1) {
+      // counter-steer assist (PLAN §6.2 "subtle"): only when the rear axle is
+      // genuinely saturated AND the body is sliding — never during normal
+      // cornering (β is naturally nonzero there). Uses last step's saturation.
+      target = clamp(target + 0.45 * this.beta * dMax, -dMax, dMax);
     }
     const rate = t.steerRate * dt;
     this.steer += clamp(target - this.steer, -rate, rate);
@@ -140,8 +145,8 @@ export class Car {
       limiter;
     // brake force is a decelerating (negative) contribution, split per axle
     const brakeFwd = -t.brakeForce * intent.brake;
-    const muF = t.muFront * gripScale;
-    const muR = t.muRear * gripScale;
+    const muF = t.muFront * gripScale * aero;
+    const muR = t.muRear * gripScale * aero;
     let FxF = drive * t.driveSplitFront + brakeFwd * t.brakeSplitFront;
     let FxR = drive * (1 - t.driveSplitFront) + brakeFwd * (1 - t.brakeSplitFront);
     FxF = clamp(FxF, -muF * Fzf, muF * Fzf);
@@ -177,10 +182,12 @@ export class Car {
     // no reverse this milestone: braking stops at zero (reverse gear is out of scope)
     if (this.u < 0) this.u = 0;
     this.w += aw * dt;
-    // gentle scrub/yaw damping — stability feel at 60 Hz without faking grip
+    // gentle scrub/yaw damping — stability feel at 60 Hz without faking grip;
+    // yaw damping scales with rear saturation (ESC-lite: kills spins fast,
+    // leaves normal cornering untouched)
     this.w *= Math.max(0, 1 - 0.35 * dt);
     this.omega += ((t.a * FyF * cosD - t.b * FyR) / t.iz) * dt;
-    this.omega *= Math.max(0, 1 - 0.25 * dt);
+    this.omega *= Math.max(0, 1 - (0.25 + 1.8 * this.rearSlip) * dt);
     this.heading += this.omega * dt;
 
     // world integration (forward = (sin h, −cos h), right = (cos h, sin h))

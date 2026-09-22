@@ -10,9 +10,9 @@
   "muFront": 1.26,
   "muRear": 1.45,
   "stiffB": 8,
-  "stiffC": 1.6,
+  "stiffC": 1.35,
   "deltaMax": 0.6,
-  "steerFadeSpeed": 20,
+  "steerFadeSpeed": 14,
   "steerRate": 3.6,
   "powerW": 370000,
   "launchForce": 12500,
@@ -26,6 +26,11 @@
   "healthMax": 85,
   "target0100": 2.7,
   "targetBrake": 33,
-  "bodyDims": [1.94, 1.02, 4.4],
-  "color": 3129201
+  "bodyDims": [
+    1.94,
+    1.02,
+    4.4
+  ],
+  "color": 3129201,
+  "downforce": 0.22
 }

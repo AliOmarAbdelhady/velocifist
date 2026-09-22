@@ -71,6 +71,8 @@
 - [x] Tests 56/56 · build green (130.9 kB gzip main + 144 kB worker; assets verified in dist)
 - [ ] **LIVE GATES (user, PLAN §5.9):** wizard mean error, latency readout, crossing feel, false-brake feel, dropout grace — report back for tuning
 
+### Session 4 (2026-09-22, hotfix 2) — worker wasm loading fixed for dev (blob + module glue, GPU-verified in browser); mute grace; camlost overlay at startup; handling rework: downforce + soft falloff + steer fade + ESC-lite (56/56 green).
+
 ### Session log — Session 3 (2026-09-22, M2)
 
 - 2 more real bugs caught by tests/fixture design: inverted finger-curl formula (PILL 024) and the wheel-at-neutral atan2 singularity → magnitude gate (PILL 023); plus tracker lock-on frame now resolves immediately, and physical-side swap() kills handedness ambiguity forever (PILL 025).

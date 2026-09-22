@@ -70,6 +70,7 @@ export class HandTracker {
   private readyResolve: (() => void) | null = null;
   private consecutiveErrors = 0;
   private lostFired = false;
+  private muteTimer: number | null = null;
 
   constructor() {
     this.solver = new GestureSolver(
@@ -111,7 +112,22 @@ export class HandTracker {
 
     for (const track of this.stream.getVideoTracks()) {
       track.addEventListener('ended', () => this.lose('camera disconnected (USB/privacy switch?)'));
-      track.addEventListener('mute', () => this.lose('camera taken over by another app'));
+      // Chrome fires transient mutes during startup renegotiation — give the
+      // track a grace period before declaring the camera stolen.
+      track.addEventListener('mute', () => {
+        if (this.muteTimer === null) {
+          this.muteTimer = window.setTimeout(() => {
+            this.muteTimer = null;
+            this.lose('camera muted — taken over by another app?');
+          }, 2500);
+        }
+      });
+      track.addEventListener('unmute', () => {
+        if (this.muteTimer !== null) {
+          clearTimeout(this.muteTimer);
+          this.muteTimer = null;
+        }
+      });
     }
 
     document.body.appendChild(this.video);
@@ -142,6 +158,10 @@ export class HandTracker {
   }
 
   stop(): void {
+    if (this.muteTimer !== null) {
+      clearTimeout(this.muteTimer);
+      this.muteTimer = null;
+    }
     this.worker?.terminate();
     this.worker = null;
     this.stream?.getTracks().forEach((t) => t.stop());
@@ -194,6 +214,10 @@ export class HandTracker {
       this.info.phase = 'READY';
       this.info.delegate = msg.delegate;
       this.readyResolve?.();
+      return;
+    }
+    if (msg.type === 'status') {
+      this.info.error = `loading: ${msg.message}`; // transient init progress
       return;
     }
     if (msg.type === 'error') {

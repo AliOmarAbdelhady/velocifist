@@ -10,7 +10,10 @@
 // MediaPipe loads its wasm glue (PILL 034).
 
 import { HandLandmarker } from '@mediapipe/tasks-vision';
-import wasmLoaderUrl from '@mediapipe/tasks-vision/vision_wasm_internal.js?url';
+// NOTE: the MODULE build of the glue — the classic build ("vision_wasm_internal.js")
+// assigns its factory to globals that don't exist when imported as ESM in a
+// module worker → "ModuleFactory not set". Binary is shared between variants.
+import wasmLoaderUrl from '@mediapipe/tasks-vision/vision_wasm_module_internal.js?url';
 import wasmBinaryUrl from '@mediapipe/tasks-vision/vision_wasm_internal.wasm?url';
 import modelUrl from '../assets/models/hand_landmarker.task?url';
 
@@ -26,10 +29,24 @@ const ctx = canvas.getContext('2d')!;
 let landmarker: HandLandmarker | null = null;
 let inFlight = false;
 
+async function buildFileset(): Promise<{ wasmLoaderPath: string; wasmBinaryPath: string }> {
+  // Vite's dev server module-transforms any served .js — including Emscripten
+  // glue — and breaks it ("importModule is not defined", swallowed as a hang
+  // inside MediaPipe's init). Blob URLs never hit the server, so we fetch the
+  // glue text (plain fetch is fine) and let the raw code execute untouched.
+  // Works identically in dev and production. (PILL 035)
+  post({ type: 'status', message: 'fetching wasm glue' });
+  const res = await fetch(wasmLoaderUrl);
+  if (!res.ok) throw new Error(`wasm glue fetch failed: HTTP ${res.status}`);
+  const src = await res.text();
+  post({ type: 'status', message: `glue fetched (${(src.length / 1024).toFixed(0)} kB) — blob` });
+  const blobUrl = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+  return { wasmLoaderPath: blobUrl, wasmBinaryPath: wasmBinaryUrl };
+}
+
 async function createLandmarker(): Promise<'GPU' | 'CPU'> {
-  // hand-built WasmFileset (FilesetResolver is just a path-join helper; we
-  // already have pipeline-resolved URLs)
-  const fileset = { wasmLoaderPath: wasmLoaderUrl, wasmBinaryPath: wasmBinaryUrl };
+  const fileset = await buildFileset();
+  post({ type: 'status', message: 'creating landmarker (GPU)' });
   const make = (delegate: 'GPU' | 'CPU') =>
     HandLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: modelUrl, delegate },

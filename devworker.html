@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+<body style="font-family: monospace; white-space: pre-wrap; padding: 20px; color: #9fe870; background: #101318">
+<div id="out">worker init test v3 — booting…</div>
+<script type="module">
+  const out = document.getElementById('out');
+  const log = (s) => { out.textContent += '\n' + s; };
+  log('page boot');
+  const worker = new Worker('/src/input/tracker.worker.ts', { type: 'module' });
+  worker.onerror = (e) => log('WORKER ERROR: ' + (e.message || 'unknown') + ' @ ' + (e.filename || '') + ':' + (e.lineno || 0));
+  worker.onmessageerror = () => log('MESSAGE ERROR');
+  worker.onmessage = (e) => log('MSG: ' + JSON.stringify(e.data).slice(0, 400));
+  log('init posted');
+  worker.postMessage({ type: 'init' });
+  setTimeout(() => log('(25s timeout reached)'), 25000);
+</script>
+</body>
+</html>

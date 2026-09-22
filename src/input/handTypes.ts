@@ -40,6 +40,7 @@ export interface TrackedHand {
 /** Worker → main message payloads. */
 export type TrackerMessage =
   | { type: 'ready'; delegate: 'GPU' | 'CPU' }
+  | { type: 'status'; message: string }
   | { type: 'error'; message: string }
   | {
       type: 'hands';

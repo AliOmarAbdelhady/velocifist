@@ -50,7 +50,11 @@ async function startWithCamera(): Promise<void> {
   if (tracker.info.phase !== 'READY') {
     const why = tracker.info.error ?? tracker.info.phase;
     tracker.stop();
-    boot(null, `camera unavailable — ${why}. Keyboard mode (retry via reload).`);
+    showCamLost(
+      why,
+      () => void startWithCamera(),
+      () => boot(null, `camera unavailable — ${why}. Keyboard mode.`),
+    );
     return;
   }
   pipwrap.classList.remove('hidden');
@@ -70,6 +74,19 @@ async function startWithCamera(): Promise<void> {
   }
 
   bootWithRecovery(tracker, pip);
+}
+
+function showCamLost(reason: string, onRetry: () => void, onKeyboard: () => void): void {
+  camlostReason.textContent = reason;
+  camlost.classList.remove('hidden');
+  document.getElementById('btnRetry')!.onclick = (): void => {
+    camlost.classList.add('hidden');
+    onRetry();
+  };
+  document.getElementById('btnKb2')!.onclick = (): void => {
+    camlost.classList.add('hidden');
+    onKeyboard();
+  };
 }
 
 function bootWithRecovery(initialTracker: HandTracker, initialPip: PipRenderer): void {
