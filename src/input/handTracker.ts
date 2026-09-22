@@ -127,11 +127,7 @@ export class HandTracker {
       type: 'module',
     });
     this.worker.onmessage = (e: MessageEvent<TrackerMessage>) => this.onMessage(e.data);
-    this.worker.postMessage({
-      type: 'init',
-      wasmBase: '/vendor/mediapipe/wasm',
-      modelUrl: '/models/hand_landmarker.task',
-    });
+    this.worker.postMessage({ type: 'init' }); // asset URLs are bundled into the worker
 
     const ready = new Promise<void>((resolve) => {
       this.readyResolve = resolve;

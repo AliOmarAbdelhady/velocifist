@@ -3,8 +3,16 @@
 // thread. Fully decoupled: inference stalls never stall the render loop.
 // Frames are single-flight (main thread skips while a frame is in flight) so
 // latency cannot accumulate a backlog.
+//
+// Asset loading: wasm glue/binary and the model go through Vite's asset
+// pipeline (`?url` imports from node_modules / src) — NOT from /public. Vite's
+// dev server refuses to module-import public/ files, which is exactly how
+// MediaPipe loads its wasm glue (PILL 034).
 
-import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+import { HandLandmarker } from '@mediapipe/tasks-vision';
+import wasmLoaderUrl from '@mediapipe/tasks-vision/vision_wasm_internal.js?url';
+import wasmBinaryUrl from '@mediapipe/tasks-vision/vision_wasm_internal.wasm?url';
+import modelUrl from '../assets/models/hand_landmarker.task?url';
 
 const W = 320;
 const H = 240;
@@ -18,8 +26,10 @@ const ctx = canvas.getContext('2d')!;
 let landmarker: HandLandmarker | null = null;
 let inFlight = false;
 
-async function createLandmarker(wasmBase: string, modelUrl: string): Promise<'GPU' | 'CPU'> {
-  const fileset = await FilesetResolver.forVisionTasks(wasmBase);
+async function createLandmarker(): Promise<'GPU' | 'CPU'> {
+  // hand-built WasmFileset (FilesetResolver is just a path-join helper; we
+  // already have pipeline-resolved URLs)
+  const fileset = { wasmLoaderPath: wasmLoaderUrl, wasmBinaryPath: wasmBinaryUrl };
   const make = (delegate: 'GPU' | 'CPU') =>
     HandLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: modelUrl, delegate },
@@ -39,13 +49,11 @@ async function createLandmarker(wasmBase: string, modelUrl: string): Promise<'GP
 }
 
 self.onmessage = async (e: MessageEvent) => {
-  const msg = e.data as
-    | { type: 'init'; wasmBase: string; modelUrl: string }
-    | { type: 'frame'; ts: number; bitmap: ImageBitmap };
+  const msg = e.data as { type: 'init' } | { type: 'frame'; ts: number; bitmap: ImageBitmap };
 
   if (msg.type === 'init') {
     try {
-      const delegate = await createLandmarker(msg.wasmBase, msg.modelUrl);
+      const delegate = await createLandmarker();
       post({ type: 'ready', delegate });
     } catch (err) {
       post({ type: 'error', message: err instanceof Error ? err.message : String(err) });

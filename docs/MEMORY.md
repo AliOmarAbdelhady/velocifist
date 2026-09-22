@@ -5,6 +5,8 @@
 
 ---
 
+- **PILL 034 · WASM/MODEL LOADING (fixes dev-server overlay error):** MediaPipe dynamically **module-imports** its wasm glue — Vite's dev server refuses to module-import anything under `/public/` ("can only be referenced via HTML tags"). Fix: assets go through Vite's pipeline via `?url` imports — `@mediapipe/tasks-vision/vision_wasm_internal.js?url` + `.wasm?url` (whitelisted in the package `exports` map) and `src/assets/models/hand_landmarker.task?url`; build the `WasmFileset` object by hand (`FilesetResolver` is just a path-join helper). `public/` directory deleted entirely. Works identically in dev and prod (hashed assets).
+
 ## 2026-09-22 — HOTFIX session (user: "camera turned off suddenly")
 
 - **PILL 030 · BUG OF THE DAY (fixed):** `HandTracker.start()` resolved immediately after POSTING worker init — model load takes 1–3 s — and the M2 flow then treated "not READY" as failure and called `stop()`, killing the granted camera stream. Symptom: camera LED on → off after ~2 s, dropped to keyboard mode. Fix: `start()` now `await`s the worker's `ready` message (25 s timeout). **Lesson: never treat async init as synchronous.**
