@@ -27,12 +27,24 @@ export class CameraRig {
   private readonly vel = new THREE.Vector3();
   private readonly look = new THREE.Vector3(0, 1, -20);
   private shakeT = 0;
-  private readonly reduced: boolean;
+  private reduced = false;
+  private shakeOn = true;
 
   constructor(private readonly camera: THREE.PerspectiveCamera) {
-    this.reduced =
-      typeof matchMedia !== 'undefined' &&
-      matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // seed from the OS query; the M9 options screen can override at runtime
+    if (typeof matchMedia !== 'undefined') {
+      try {
+        this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      } catch {
+        this.reduced = false;
+      }
+    }
+  }
+
+  /** M9 comfort: resolved reduced-motion + the user's shake toggle. */
+  setComfort(reduced: boolean, shake: boolean): void {
+    this.reduced = reduced;
+    this.shakeOn = shake;
   }
 
   cycle(): void {
@@ -102,7 +114,7 @@ export class CameraRig {
     this.shakeT += dt * (7 + 9 * speedFrac);
     let sx = 0;
     let sy = 0;
-    if (!this.reduced && this.mode !== 1) {
+    if (this.shakeOn && !this.reduced && this.mode !== 1) {
       const amp = 0.02 * speedFrac * speedFrac;
       sx = amp * (Math.sin(this.shakeT * 1.1) + 0.5 * Math.sin(this.shakeT * 2.3 + 1.7));
       sy = amp * (Math.sin(this.shakeT * 1.7 + 0.9) + 0.5 * Math.sin(this.shakeT * 2.9 + 2.4));
@@ -111,8 +123,9 @@ export class CameraRig {
     this.camera.position.set(this.pos.x + sx, this.pos.y + sy, this.pos.z);
     this.camera.lookAt(this.look);
     const baseFov = this.mode === 1 ? 56 : 50;
+    // reduced motion: cap the speed-FOV swing to a mild 6° (comfort FOV ceiling)
     const fovSpan = this.mode === 1 ? 24 : 28;
-    this.camera.fov = baseFov + fovSpan * speedFrac;
+    this.camera.fov = baseFov + fovSpan * speedFrac * (this.reduced ? 0.22 : 1);
     this.camera.updateProjectionMatrix();
   }
 }

@@ -123,3 +123,35 @@ describe('PersistenceService', () => {
     expect(top[0].score).toBe(7);
   });
 });
+
+describe('M9 settings (comfort & accessibility)', () => {
+  it('a pre-M9 save migrates: missing comfort fields fill from defaults', () => {
+    const store = new FakeStorage();
+    // what M8 actually wrote — no sensitivity/oneHanded/pip fields at all
+    store.map.set('vfc.settings', JSON.stringify({
+      schema: 2, car: 'falcone-gt', envPin: null, volume: 0.55, quality: 'medium',
+    }));
+    const p = new PersistenceService(store);
+    const s = p.settings;
+    expect(s.volume).toBeCloseTo(0.55, 6);
+    expect(s.quality).toBe('medium');
+    expect(s.sensitivity).toBe(1);
+    expect(s.oneHanded).toBe(false);
+    expect(s.shake).toBe(true);
+    expect(s.speedLines).toBe(true);
+    expect(s.reducedMotion).toBe('auto');
+    expect(s.pipCorner).toBe('br');
+    expect(s.pipScale).toBe(1);
+  });
+
+  it('comfort settings round-trip through setSettings', () => {
+    const p = new PersistenceService(new FakeStorage());
+    p.setSettings({ sensitivity: 1.35, oneHanded: true, shake: false, pipCorner: 'tl', pipScale: 0.8 });
+    const s = p.settings;
+    expect(s.sensitivity).toBeCloseTo(1.35, 6);
+    expect(s.oneHanded).toBe(true);
+    expect(s.shake).toBe(false);
+    expect(s.pipCorner).toBe('tl');
+    expect(s.pipScale).toBeCloseTo(0.8, 6);
+  });
+});

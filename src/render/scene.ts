@@ -16,6 +16,7 @@ import { EnvironmentRenderer, THEMES } from './environment';
 import { FXSystem } from './fx';
 import { GradePass } from './grade';
 import type { QualityPreset } from '../core/quality';
+import type { ComfortView } from '../core/motion';
 
 /** Cheap theme-matched env map: equirect gradient + sun blob → PMREM. */
 function buildEnvMap(
@@ -71,6 +72,9 @@ export class GameScene {
   private road: RoadSystem;
   private readonly proj: Projection = { s: 0, lat: 0 };
   private smokeAccAnchors = { x: 0, z: 0 };
+  /** M9 comfort state (last applied — speed lines re-gate on change) */
+  private comfort: ComfortView = { reduced: false, shake: true, speedLines: true };
+  private lastPreset: QualityPreset | null = null;
 
   constructor(tune: CarTune, road: RoadSystem, theme: ThemeId, seed: number) {
     this.road = road;
@@ -157,11 +161,25 @@ export class GameScene {
 
   /** Quality preset application (auto-scaler / manual). */
   applyQuality(preset: QualityPreset): void {
+    this.lastPreset = preset;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, preset.dprCap));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.grade.setEnabled(preset.gradePass, preset.msaa);
-    this.fx.setBudgets(preset.sparkCap, preset.smokeCap, preset.speedLines);
+    this.fx.setBudgets(preset.sparkCap, preset.smokeCap, preset.speedLines && this.comfort.speedLines);
     this.syncGradeSize();
+  }
+
+  /** M9 comfort: reduced-motion resolution + shake/streak toggles. */
+  setComfort(comfort: ComfortView): void {
+    this.comfort = comfort;
+    this.rig.setComfort(comfort.reduced, comfort.shake);
+    if (this.lastPreset) {
+      this.fx.setBudgets(
+        this.lastPreset.sparkCap,
+        this.lastPreset.smokeCap,
+        this.lastPreset.speedLines && comfort.speedLines,
+      );
+    }
   }
 
   /** Damage-state plumbing into car + FX presentation. */

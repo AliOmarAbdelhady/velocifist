@@ -141,3 +141,12 @@
 - Telemetry: 1 Hz run vitals + audit block, exportable JSON from the results screen (verified as a real download headless); seed recorded for world reproduction.
 - Verification: 187/187 tests (17 new events/telemetry gates); E2E `scripts/e2e-m8.mjs` green (event injected + toast caught on a clean drive; scripted-wreck run → results → download + "saved ✓"), 0 console errors.
 - Docs: PLAN v1.5, PILLs 081–085.
+
+### Session 11 (2026-09-23, M9) — comfort & polish
+- **Options overlay** (O key / Esc / ⚙ button): steering sensitivity 0.5–1.5 (curve-exponent warp, full lock preserved), one-handed mode, volume, camera shake, speed lines, reduced motion (auto/on/off), PiP corner + size 0.6–1.5, quality preset, recalibrate hands, export/import/reset save data. DOM panel, ≥44 px rows, gear button, opens over garage/results/drive.
+- **One-handed mode** (PILL 086): single hand drives — fist = throttle, open palm = brake after the regrip window; wrist displacement steers the same virtual wheel with the same sign rule (missing hand parked on its anchor, ×2 displacement). Single visible hand = TRACKING with full confidence. AR banner speaks the one-handed contract ('FIST — FULL THROTTLE', 'OPEN PALM — BRAKING', 'SHOW A HAND').
+- **Accessibility/comfort (ADR-011):** `prefers-reduced-motion` resolved once and respected everywhere — camera shake off, speed-line streaks off, FOV speed-span capped at ~6°, CSS toast/glow animations disabled; user toggles AND with the reduction, never around it. Settings additive on schema 2 (pre-M9 saves migrate free, tested).
+- **Pause:** options pauses the sim (step skipped, render alive) during a run; recalibrate runs the wizard mid-run and resumes; wizard is modal over the O key.
+- **Latency readout:** audio output latency (base+output from AudioContext) + hand-tracker latency/delegate, live while the panel is open.
+- **Verification:** 210/210 tests (23 new: one-handed drive/steer-sign/brake/regrip/lost, sensitivity separation + full-lock, banner one-handed, comfort resolution, settings migration); build green; E2E `scripts/e2e-m9.mjs` green — options open/pause-freeze/persist nine settings/live PiP layout/quality pin 'pinned low'/reopen-synced/export download/two-click reset, plus a `?pipdemo=1` leg proving one-handed drives the real pipeline (TRACKING + HANDS_LOST both observed over a full demo cycle), 0 console errors.
+- Docs: PLAN v1.6, PILLs 086–090, ADR-011.

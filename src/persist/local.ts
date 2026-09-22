@@ -25,6 +25,20 @@ export interface GameSettings {
   /** 'auto' = presets with the frame-time auto-scaler (ADR-008 easy-first,
    *  M6 quality system); manual levels pin the preset */
   quality: 'auto' | 'low' | 'medium' | 'high';
+  // ---- M9 comfort & accessibility (PLAN §15) ----
+  /** hand-steering sensitivity multiplier 0.5..1.5 (1 = default response) */
+  sensitivity: number;
+  /** drive with a single hand: fist = throttle, open palm = brake */
+  oneHanded: boolean;
+  /** camera micro-shake (also forced off by resolved reduced-motion) */
+  shake: boolean;
+  /** speed-line streaks (also forced off by resolved reduced-motion) */
+  speedLines: boolean;
+  /** 'auto' follows the OS prefers-reduced-motion query */
+  reducedMotion: 'auto' | 'on' | 'off';
+  /** PiP corner + scale 0.6..1.5 of the 330×248 base */
+  pipCorner: 'tl' | 'tr' | 'bl' | 'br';
+  pipScale: number;
 }
 
 export interface Progress {
@@ -53,6 +67,13 @@ export const DEFAULT_SETTINGS: GameSettings = {
   envPin: null,
   volume: 0.8,
   quality: 'auto',
+  sensitivity: 1,
+  oneHanded: false,
+  shake: true,
+  speedLines: true,
+  reducedMotion: 'auto',
+  pipCorner: 'br',
+  pipScale: 1,
 };
 
 export const DEFAULT_PROGRESS: Progress = {

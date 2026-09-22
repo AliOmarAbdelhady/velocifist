@@ -45,7 +45,11 @@ const STATUS_COLOR: Record<string, string> = {
 const TRAIL = 26;
 
 /** Plain-language readout of what the hands are commanding (pure — tested). */
-export function gestureBanner(state: SolverState, intent: DriverIntent): string {
+export function gestureBanner(
+  state: SolverState,
+  intent: DriverIntent,
+  oneHanded = false,
+): string {
   switch (state.status) {
     case 'UNCALIBRATED':
       return 'HOLD BOTH HANDS UP TO CALIBRATE';
@@ -54,9 +58,18 @@ export function gestureBanner(state: SolverState, intent: DriverIntent): string 
     case 'HANDS_LOST':
       return `HANDS LOST — AUTO-HOLD`;
     case 'PARTIAL':
+      if (oneHanded) return 'SHOW A HAND';
       if (state.fistL || state.fistR) return 'ONE HAND — HOLDING';
       return 'SHOW BOTH HANDS';
     case 'TRACKING':
+      if (oneHanded && !(state.fistL && state.fistR)) {
+        if (state.fistL || state.fistR) {
+          const a = Math.abs(state.wheelAngleDeg);
+          if (a < 10) return 'FIST — FULL THROTTLE';
+          return `TURNING ${state.wheelAngleDeg > 0 ? 'LEFT' : 'RIGHT'} ${Math.round(a)}°`;
+        }
+        return 'OPEN PALM — BRAKING';
+      }
       if (state.fistL && state.fistR) {
         const a = Math.abs(state.wheelAngleDeg);
         if (a < 10) return 'FISTS — FULL THROTTLE';
@@ -304,7 +317,7 @@ export class PipRenderer {
   }
 
   private drawBanner(g: CanvasRenderingContext2D, w: number, h: number, st: SolverState, _intent: DriverIntent): void {
-    const text = gestureBanner(st, this.source.solver.intent);
+    const text = gestureBanner(st, this.source.solver.intent, st.oneHanded);
     g.font = 'bold 16px ui-monospace, monospace';
     const tw = g.measureText(text).width;
     const bx = w / 2 - tw / 2 - 14;

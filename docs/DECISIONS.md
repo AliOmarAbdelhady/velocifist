@@ -103,3 +103,17 @@ M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determi
 3. **Driver aid:** forward-collision auto-brake assist (TTC-based, capped 0.7, relieved by deliberate evasion, player's own braking always wins) — an extension of ADR-008 easy-first: the game actively protects an unsupported player, and opting into risk (weaving toward cars) is still rewarded by the scoring systems.
 
 **Consequences.** Crashes now require sustained indifference rather than a moment's lost tracking. Near-miss scoring is unaffected (assist never steers and yields to evasion). The assist is a scored UX surface (AUTO-BRAKE chip + dev-HUD level), and it is NOT in the deterministic sim path — it lives in main's intent blend, keeping the sim's state-hash tests stable.
+
+## ADR-011 — Comfort & accessibility contract (M9)
+
+**Date:** 2026-09-23 · **Status:** accepted
+
+**Context.** PLAN §15 demands a complete options surface (sensitivity, one-handed mode, shake, latency readout, PiP pos/size, recalibrate, data export/import/reset; ≥44 px targets; `prefers-reduced-motion` respected). Motion-comfort toggles and OS-level reduction must compose predictably, and one-handed play must not be a separate input stack.
+
+**Decision.**
+1. **Comfort is AND-semantics:** every motion effect = user toggle ∧ ¬resolvedReducedMotion. The OS query (`prefers-reduced-motion: reduce`) is the ceiling; the user setting is 'auto' (follow OS) / 'on' / 'off'. A user toggling shake ON cannot override a reduced-motion resolution — but CAN explicitly resolve reduction 'off' (informed choice). Applies to: camera micro-shake, speed-line streaks, FOV speed-span (capped ≈6° under reduction), CSS toast/glow animations.
+2. **One-handed mode is the same wheel, not a new stack:** the missing hand is parked on its calibration anchor; the visible hand's displacement is doubled to match two-hand counter-rotation. Identical magnitude gate, zone gate, slew, deadzone and SIGN RULE; calibration still uses both hands. Contract: visible fist = throttle, open palm = brake after the regrip window, single visible hand = TRACKING at full confidence.
+3. **Sensitivity warps the response exponent** (`pow(a, curveExp/gain)`, gain 0.5–1.5): full lock stays reachable at every gain — comfort tuning changes how SOON authority arrives, never the car's maximum capability.
+4. **Options pauses the run** (sim step skipped, render alive) — changing feel settings mid-run must not crash the car; recalibrate replays the wizard from the same parked state.
+
+**Consequences.** Settings are additive on persistence schema 2 (old saves migrate by default-merge — tested). The options panel is the single mutation surface; main.ts fans changes out to audio/tracker/pip/quality/comfort via one callback. E2E proves pause-freeze, persistence, live application and reset; unit tests pin the one-handed sign rule, regrip protection and sensitivity separation.

@@ -19,9 +19,56 @@
     .tag { color: #9aa4b8; letter-spacing: 0.1em; margin: 0; }
     .keys { color: #d7dee9; font-size: 15px; margin: 0; }
     #devhud {
-      position: fixed; top: 10px; left: 10px; z-index: 5; pointer-events: none; white-space: pre;
+      position: fixed; top: 64px; left: 10px; z-index: 5; pointer-events: none; white-space: pre;
       font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace; color: #9fe870;
       background: rgba(0, 0, 0, 0.45); padding: 8px 10px; border-radius: 6px;
+    }
+    /* ---- M9 options ---- */
+    #btnOptions { position: fixed; top: 12px; left: 12px; z-index: 6; width: 44px; height: 44px;
+      border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); background: rgba(10,14,22,0.6);
+      color: #e8ecf4; font-size: 20px; line-height: 1; cursor: pointer; }
+    #btnOptions:hover { background: rgba(30,38,56,0.85); }
+    #options { cursor: default; }
+    #optionsPanel { width: min(560px, 92vw); max-height: 86vh; overflow-y: auto;
+      background: rgba(13,17,26,0.97); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px; padding: 22px 26px 18px; text-align: left;
+      font-family: 'Segoe UI', system-ui, sans-serif; }
+    #optionsPanel h1 { font-size: 26px; letter-spacing: 0.18em; margin: 0 0 6px; color: #ff5a1f; }
+    .opt-section { margin-top: 14px; }
+    .opt-section h2 { font-size: 12px; letter-spacing: 0.22em; color: #9aa4b8; margin: 0 0 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px; }
+    .opt-row { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      min-height: 44px; font-size: 15px; color: #d7dee9; }
+    .opt-row label { flex: 1; }
+    .opt-row .val { font: 600 14px ui-monospace, monospace; color: #ffb01f; min-width: 52px; text-align: right; }
+    .opt-row input[type='range'] { width: 180px; accent-color: #ff5a1f; height: 28px; }
+    .opt-row input[type='checkbox'] { width: 22px; height: 22px; accent-color: #ff5a1f; }
+    .opt-row select { background: #1a2130; color: #e8ecf4; border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px; padding: 8px 10px; font-size: 14px; }
+    .opt-corners { display: flex; gap: 6px; }
+    .opt-corners button { min-width: 44px; min-height: 34px; font: 600 13px ui-monospace, monospace;
+      background: #1a2130; color: #cfd6e4; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; cursor: pointer; }
+    .opt-corners button.sel { border-color: #ff5a1f; color: #ff5a1f; background: rgba(255,90,31,0.12); }
+    .opt-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .opt-actions button { font: 600 13px 'Segoe UI', system-ui; background: #3a4356; color: #e8ecf4;
+      border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; min-height: 40px; }
+    .opt-actions button:hover { background: #4a5468; }
+    .opt-btn { font: 600 13px 'Segoe UI', system-ui; background: #3a4356; color: #e8ecf4;
+      border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; min-height: 40px; }
+    .opt-btn:hover { background: #4a5468; }
+    .opt-btn:disabled { opacity: 0.45; cursor: default; }
+    #optLatency, #optRecalHint { font: 12px ui-monospace, monospace; color: #8a93a6; }
+    #optionsPanel .opt-done { margin-top: 18px; width: 100%; }
+    /* PiP corners (M9) — the .wizard rule below must stay AFTER these to win */
+    #pipwrap.pip-tl { left: 14px; right: auto; top: 14px; bottom: auto; }
+    #pipwrap.pip-tr { right: 14px; left: auto; top: 14px; bottom: auto; }
+    #pipwrap.pip-bl { left: 14px; right: auto; top: auto; bottom: 14px; }
+    #pipwrap.pip-br { right: 14px; left: auto; top: auto; bottom: 14px; }
+    @media (prefers-reduced-motion: reduce) {
+      .toast { animation: none; opacity: 0.9; }
+      #handGlow.glow-lost { animation: none; }
+      #results .newbest { animation: none; }
+      #hudAssist.on { animation: none; }
     }
     #pipwrap { position: fixed; right: 14px; bottom: 14px; z-index: 4; pointer-events: none; }
     #pipwrap.wizard {
@@ -134,13 +181,14 @@
   </div>
 
   <div id="handGlow"></div>
+  <button id="btnOptions" title="Options (O)" aria-label="Options">⚙</button>
   <div id="pipwrap" class="hidden"><canvas id="pip"></canvas></div>
 
   <div id="overlay" class="overlay">
     <h1>Velocifist</h1>
     <p class="tag">WEAVE TRAFFIC WITH YOUR BARE HANDS</p>
-    <p class="keys">M2 — hand tracking online: fists = throttle · open = brake · cross hands for lock</p>
-    <p class="keys">keyboard always works: W/S · A/D · C camera · 1/2/3 car</p>
+    <p class="keys">fists = throttle · open palms = brake · cross hands for lock</p>
+    <p class="keys">keyboard always works: W/S · A/D · C camera · O options · 1/2/3 car</p>
     <p class="keys">CLICK TO START</p>
   </div>
 
@@ -178,6 +226,102 @@
     <div class="garage-foot">
       <button id="btnGarageBack" class="secondary">back</button>
       <button id="btnGarageGo">DRIVE</button>
+    </div>
+  </div>
+
+  <div id="options" class="overlay hidden">
+    <div id="optionsPanel">
+      <h1>OPTIONS</h1>
+
+      <div class="opt-section">
+        <h2>STEERING</h2>
+        <div class="opt-row">
+          <label for="optSens">sensitivity</label>
+          <input type="range" id="optSens" min="0.5" max="1.5" step="0.05" value="1" />
+          <span class="val" id="optSensVal">1.00×</span>
+        </div>
+        <div class="opt-row">
+          <label for="optOneHanded">one-handed mode <span style="color:#8a93a6;">(fist = go · open = brake)</span></label>
+          <input type="checkbox" id="optOneHanded" />
+        </div>
+        <div class="opt-row">
+          <button id="optRecal" class="opt-btn">recalibrate hands</button>
+          <span id="optRecalHint">camera mode only</span>
+        </div>
+      </div>
+
+      <div class="opt-section">
+        <h2>AUDIO</h2>
+        <div class="opt-row">
+          <label for="optVol">volume</label>
+          <input type="range" id="optVol" min="0" max="1" step="0.05" value="0.8" />
+          <span class="val" id="optVolVal">80%</span>
+        </div>
+        <div class="opt-row"><span id="optLatency">output latency —</span></div>
+      </div>
+
+      <div class="opt-section">
+        <h2>COMFORT</h2>
+        <div class="opt-row">
+          <label for="optShake">camera shake</label>
+          <input type="checkbox" id="optShake" checked />
+        </div>
+        <div class="opt-row">
+          <label for="optLines">speed lines</label>
+          <input type="checkbox" id="optLines" checked />
+        </div>
+        <div class="opt-row">
+          <label for="optReduced">reduced motion</label>
+          <select id="optReduced">
+            <option value="auto">auto (follow OS)</option>
+            <option value="on">on</option>
+            <option value="off">off</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="opt-section">
+        <h2>HANDS CAMERA (PiP)</h2>
+        <div class="opt-row">
+          <label>corner</label>
+          <div class="opt-corners">
+            <button id="optTL" data-corner="tl">TL</button>
+            <button id="optTR" data-corner="tr">TR</button>
+            <button id="optBL" data-corner="bl">BL</button>
+            <button id="optBR" data-corner="br" class="sel">BR</button>
+          </div>
+        </div>
+        <div class="opt-row">
+          <label for="optPipScale">size</label>
+          <input type="range" id="optPipScale" min="0.6" max="1.5" step="0.05" value="1" />
+          <span class="val" id="optPipScaleVal">100%</span>
+        </div>
+      </div>
+
+      <div class="opt-section">
+        <h2>VIDEO</h2>
+        <div class="opt-row">
+          <label for="optQuality">quality</label>
+          <select id="optQuality">
+            <option value="auto">auto</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="opt-section">
+        <h2>DATA</h2>
+        <div class="opt-actions">
+          <button id="optExport">export save</button>
+          <button id="optImport">import save</button>
+          <button id="optReset">reset save data</button>
+          <input type="file" id="optImportFile" accept="application/json,.json" class="hidden" />
+        </div>
+      </div>
+
+      <button id="optDone" class="opt-done">DONE</button>
     </div>
   </div>
 

@@ -21,7 +21,7 @@ import { CalibrationWizard } from './ui/calibrationWizard';
 import { GameHud } from './ui/hud';
 import { ResultsScreen } from './ui/results';
 import { Garage } from './ui/garage';
-import { PersistenceService } from './persist/local';
+import { PersistenceService, type GameSettings } from './persist/local';
 import { CAM_MODES } from './render/cameraRig';
 import { GameAudio } from './audio/audio';
 import { QualityManager } from './core/quality';
@@ -29,6 +29,8 @@ import { DemoHands } from './input/demoHands';
 import { EventDirector, EVENT_LABEL } from './sim/events';
 import { TelemetryRecorder, type RunTelemetry } from './core/telemetry';
 import { forwardAssist, applyAssist, type AssistView } from './sim/assist';
+import { resolveReducedMotion, deriveComfort, prefersReducedMotion } from './core/motion';
+import { OptionsPanel } from './ui/options';
 import type { TrackerLike } from './render/pip';
 
 const overlay = document.getElementById('overlay')!;
@@ -54,6 +56,77 @@ let demoHands: DemoHands | null = null;
 const audio = GameAudio.create();
 audio?.setVolume(persist.settings.volume);
 
+// ------------------------------------------------------- M9 settings plumbing
+
+const PIP_BASE_W = 330;
+const PIP_BASE_H = 248;
+
+let getTrackerFn: (() => TrackerLike | null) | null = null;
+let getPipFn: (() => PipRenderer | null) | null = null;
+
+function applyPipLayout(s: GameSettings): void {
+  pipwrap.classList.remove('pip-tl', 'pip-tr', 'pip-bl', 'pip-br');
+  pipwrap.classList.add(`pip-${s.pipCorner}`);
+  const canvas = document.getElementById('pip');
+  if (canvas instanceof HTMLCanvasElement) {
+    canvas.style.width = `${Math.round(PIP_BASE_W * s.pipScale)}px`;
+    canvas.style.height = `${Math.round(PIP_BASE_H * s.pipScale)}px`;
+  }
+}
+
+/** Push persisted steering settings into a (possibly new) tracker's solver. */
+function applyTrackerSettings(tracker: TrackerLike | null): void {
+  const s = persist.settings;
+  tracker?.solver.setSensitivity(s.sensitivity);
+  tracker?.solver.setOneHanded(s.oneHanded);
+}
+
+function comfortFromSettings() {
+  const s = persist.settings;
+  const reduced = resolveReducedMotion(s.reducedMotion, prefersReducedMotion());
+  return deriveComfort(reduced, s.shake, s.speedLines);
+}
+
+const options = new OptionsPanel(persist, {
+  onSettings: (s, changed) => {
+    if (changed === '' || changed === 'pipCorner' || changed === 'pipScale') applyPipLayout(s);
+    if (changed === '' || changed === 'sensitivity' || changed === 'oneHanded')
+      applyTrackerSettings(getTrackerFn?.() ?? null);
+    if (changed === '' || changed === 'volume') audio?.setVolume(s.volume);
+    if (changed === '' || changed === 'quality') currentGame?.quality.setMode(s.quality);
+    if (
+      changed === '' ||
+      changed === 'shake' ||
+      changed === 'speedLines' ||
+      changed === 'reducedMotion'
+    )
+      currentGame?.scene.setComfort(comfortFromSettings());
+  },
+  onRecalibrate: () => void recalibrateHands(),
+  getTracker: () => getTrackerFn?.() ?? null,
+  audioLatencyMs: () => audio?.latencyMs ?? null,
+  setVolume: (v) => audio?.setVolume(v),
+});
+
+function toggleOptions(): void {
+  if (!wizardRoot.classList.contains('hidden')) return; // wizard is modal
+  if (options.isOpen) {
+    options.close();
+    currentGame?.setPaused(false);
+  } else {
+    currentGame?.setPaused(true);
+    options.open();
+  }
+}
+
+document.getElementById('btnOptions')!.addEventListener('click', () => toggleOptions());
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyO') toggleOptions();
+  else if (e.code === 'Escape' && options.isOpen) toggleOptions();
+});
+
+applyPipLayout(persist.settings);
+
 // ---------------------------------------------------------------- game shell
 
 type Phase = 'driving' | 'wrecked' | 'results';
@@ -66,7 +139,7 @@ class Game {
   private readonly resultsScreen = new ResultsScreen();
   private readonly keyboard = createKeyboard();
   private readonly arbiter = new InputArbiter();
-  private readonly quality: QualityManager;
+  readonly quality: QualityManager;
   private readonly onRetryClick = (): void => this.retry();
   private readonly onGarageClick = (): void => this.toGarage();
 
@@ -80,6 +153,7 @@ class Game {
   private theme: ThemeId;
   private phase: Phase = 'driving';
   private runT = 0;
+  private paused = false;
   private densityTimer = 0;
   private px = 0;
   private pz = 0;
@@ -143,6 +217,7 @@ class Game {
       this.scene.applyQuality(preset);
     });
     this.scene.applyQuality(this.quality.preset);
+    this.scene.setComfort(comfortFromSettings());
     audio?.retune(tune);
     audio?.setRunning(true);
     this.scene.setDamageState('PRISTINE');
@@ -159,7 +234,13 @@ class Game {
     this.loop.start();
   }
 
+  /** M9: freeze the sim while the options overlay is open (render continues). */
+  setPaused(on: boolean): void {
+    this.paused = on;
+  }
+
   private step(dt: number): void {
+    if (this.paused) return;
     this.keyboard.update(dt);
     const t = performance.now() / 1000;
     const tracker = this.getTracker();
@@ -367,6 +448,7 @@ class Game {
   }
 
   private onKey = (e: KeyboardEvent): void => {
+    if (options.isOpen) return; // options owns the keyboard while open
     if (e.code === 'KeyC') this.scene.cycleCamera();
     else if (e.code === 'KeyT') this.cycleTheme();
     else if (e.code === 'KeyQ') this.cycleQuality();
@@ -451,6 +533,7 @@ function chooseInput(tune: CarTune): void {
   if (pipdemo) {
     demoHands = new DemoHands();
     demoHands.start();
+    applyTrackerSettings(demoHands);
     pipwrap.classList.remove('hidden');
     const pip = new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, demoHands);
     launch(tune, () => demoHands, () => pip, 'pip demo — synthetic hands drive the real pipeline');
@@ -487,6 +570,7 @@ async function startWithCamera(tune: CarTune): Promise<void> {
     );
     return;
   }
+  applyTrackerSettings(tracker);
   pipwrap.classList.remove('hidden');
   const pip = new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, tracker);
 
@@ -544,6 +628,7 @@ function bootWithRecovery(tune: CarTune, initialTracker: HandTracker, initialPip
     }
     nt.onLost = onLost;
     tracker = nt;
+    applyTrackerSettings(nt);
     pip = new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, nt);
     pipwrap.classList.remove('hidden');
   };
@@ -565,12 +650,40 @@ function launch(
   note?: string,
 ): void {
   currentGame?.dispose();
+  getTrackerFn = getTracker;
+  getPipFn = getPip;
   currentGame = new Game(
     getTracker ?? (() => null),
     getPip ?? (() => null),
     tune,
     note,
   );
+}
+
+/** M9 options → recalibrate: park the run, replay the wizard, resume. */
+async function recalibrateHands(): Promise<void> {
+  const tracker = getTrackerFn?.() ?? null;
+  if (!(tracker instanceof HandTracker)) {
+    // demo/keyboard: nothing to recalibrate — resume immediately
+    currentGame?.setPaused(false);
+    return;
+  }
+  currentGame?.setPaused(true);
+  const pip =
+    getPipFn?.() ?? new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, tracker);
+  wizardRoot.classList.remove('hidden');
+  pipwrap.classList.remove('hidden');
+  pipMount.appendChild(pipwrap);
+  const wizard = new CalibrationWizard(tracker, pip, {
+    root: wizardRoot,
+    title: document.getElementById('wizardTitle') as HTMLElement,
+    body: document.getElementById('wizardBody') as HTMLElement,
+    progress: document.getElementById('wizardBar') as HTMLElement,
+  });
+  await wizard.run();
+  document.body.appendChild(pipwrap); // PiP back to its corner
+  wizardRoot.classList.add('hidden');
+  currentGame?.setPaused(false);
 }
 
 overlay.addEventListener(

@@ -146,6 +146,8 @@ export interface SolverState {
   latencyHintMs: number;
   /** seconds since both hands were confidently seen (AR countdown / glow) */
   handsAgeS: number;
+  /** M9 one-handed mode active (fist = throttle, open palm = brake) */
+  oneHanded?: boolean;
 }
 
 export class GestureSolver {
@@ -173,6 +175,9 @@ export class GestureSolver {
   private lastDriveTime = -1e9;
   private lastSeenTime = -1e9;
   private tPrev = -1;
+  private oneHanded = false;
+  /** hand-steering sensitivity multiplier (options, M9) — response exponent /gain */
+  private steerGain = 1;
   private readonly saveCalib: (c: CalibrationData) => void;
 
   constructor(
@@ -215,7 +220,18 @@ export class GestureSolver {
       confidence: this.conf,
       latencyHintMs: 0,
       handsAgeS: this.tPrev - this.lastSeenTime,
+      oneHanded: this.oneHanded,
     };
+  }
+
+  /** M9 one-handed mode: a single hand drives (fist = go, open = brake). */
+  setOneHanded(on: boolean): void {
+    this.oneHanded = on;
+  }
+
+  /** M9 sensitivity 0.5..1.5 — warps the response curve, full lock preserved. */
+  setSensitivity(s: number): void {
+    this.steerGain = clamp(s, 0.4, 2);
   }
 
   private fistStateL = false;
@@ -280,17 +296,39 @@ export class GestureSolver {
       this.fistStateR = this.fistR.update(0.0, this.cfg);
     }
 
-    // ---- steering wheel (needs both hands) ----
+    // ---- steering wheel ----
+    // Displacement-vector v accumulates each visible hand's offset from its
+    // anchor (two-hand counter-rotation ⇒ v = 2× per-hand displacement). In
+    // one-handed mode a single hand carries the ×2 alone: same wrist travel,
+    // same wheel angle — the missing hand is treated as parked on its anchor.
     let target = 0;
     let zone = 0;
-    if (both) {
-      const c = this.calib;
-      const lx = this.fxL.filter(pair.left!.data[0], t);
-      const ly = this.fyL.filter(pair.left!.data[1], t);
-      const rx = this.fxR.filter(pair.right!.data[0], t);
-      const ry = this.fyR.filter(pair.right!.data[1], t);
-      const vx = (rx - c.anchorRx) - (lx - c.anchorLx);
-      const vy = (ry - c.anchorRy) - (ly - c.anchorLy);
+    const c = this.calib;
+    const cx = (c.anchorLx + c.anchorRx) / 2;
+    const cy = (c.anchorLy + c.anchorRy) / 2;
+    const radius = Math.max(0.05, c.shoulderRef / 2);
+    let vx = 0;
+    let vy = 0;
+    let dmax = 0;
+    if (pair.left) {
+      const lx = this.fxL.filter(pair.left.data[0], t);
+      const ly = this.fyL.filter(pair.left.data[1], t);
+      vx -= lx - c.anchorLx;
+      vy -= ly - c.anchorLy;
+      dmax = Math.max(dmax, Math.hypot(lx - cx, ly - cy));
+    }
+    if (pair.right) {
+      const rx = this.fxR.filter(pair.right.data[0], t);
+      const ry = this.fyR.filter(pair.right.data[1], t);
+      vx += rx - c.anchorRx;
+      vy += ry - c.anchorRy;
+      dmax = Math.max(dmax, Math.hypot(rx - cx, ry - cy));
+    }
+    if (both || (this.oneHanded && any)) {
+      if (!both) {
+        vx *= 2;
+        vy *= 2;
+      }
       // magnitude gate first: at neutral, v ≈ 0 and atan2 of noise is ±90°+
       // (singularity). |v| ≈ shoulderRef × wheel-angle-rad, so gate ≈ 6°–10°.
       const magN = Math.hypot(vx, vy) / Math.max(0.05, c.shoulderRef);
@@ -298,10 +336,6 @@ export class GestureSolver {
       const ang = magN > 1e-4 ? (-Math.atan2(vy, vx) * 180) / Math.PI : 0;
       target = clamp(ang, -this.cfg.wheelLockDeg, this.cfg.wheelLockDeg) * magGate;
       // zone gating: fade authority when hands leave the wheel neighbourhood
-      const cx = (c.anchorLx + c.anchorRx) / 2;
-      const cy = (c.anchorLy + c.anchorRy) / 2;
-      const radius = Math.max(0.05, c.shoulderRef / 2);
-      const dmax = Math.max(Math.hypot(lx - cx, ly - cy), Math.hypot(rx - cx, ry - cy));
       const fadeStart = this.cfg.zoneRadiusFactor * radius;
       zone = clamp((fadeStart + 0.3 * radius - dmax) / (0.3 * radius), 0, 1);
     }
@@ -316,14 +350,17 @@ export class GestureSolver {
       0,
       1,
     );
-    const response = Math.pow(a, this.cfg.wheelCurveExp) * zone;
+    // M9 sensitivity warps the curve exponent (a=1 always maps to full lock;
+    // gain >1 reaches authority sooner, <1 demands more wheel)
+    const response =
+      Math.pow(a, this.cfg.wheelCurveExp / this.steerGain) * zone;
     this.intent.steer = -Math.sign(this.wheelAngle) * response;
 
     // ---- pedal FSM (regrip-aware, PLAN §5.5) ----
     const handsLost = t - this.lastSeenTime > this.cfg.handsLostGrace;
     if (handsLost) {
       this.status = 'HANDS_LOST';
-    } else if (both) {
+    } else if (both || (this.oneHanded && any)) {
       this.status = 'TRACKING';
     } else {
       this.status = 'PARTIAL';
@@ -332,21 +369,46 @@ export class GestureSolver {
     const inDrive = this.fistStateL && this.fistStateR;
     const oneFist = this.fistStateL !== this.fistStateR;
     const noFist = !this.fistStateL && !this.fistStateR;
-    if (inDrive) this.lastDriveTime = t;
-    const regrip = oneFist && t - this.lastDriveTime < this.cfg.regripWindow;
+    // one-handed: only a hand that is actually visible may command the throttle
+    const fistVisible =
+      (pair.left !== null && this.fistStateL) ||
+      (pair.right !== null && this.fistStateR);
+    if (this.oneHanded ? fistVisible : inDrive) this.lastDriveTime = t;
+    const regrip = t - this.lastDriveTime < this.cfg.regripWindow;
     // ROBUSTNESS (M7): one hand dropped out of frame while the other still
     // grips → HOLD everything. Detection flicker must not cut the throttle;
     // the missing hand was not "opened" (that would be a deliberate brake).
     const partialHold = oneFist && (!pair.left || !pair.right);
 
-    if (handsLost) {
+    if (this.oneHanded) {
+      if (handsLost) {
+        // AUTO-HOLD: lift throttle, gentle brake, hold/decay steering
+        this.intent.throttle = Math.max(0, this.intent.throttle - 5 * dt);
+        this.intent.brake = approach(this.intent.brake, this.cfg.autoHoldBrake, 2 * dt);
+      } else if (fistVisible) {
+        this.intent.brake = approach(this.intent.brake, 0, 5 * dt);
+        this.intent.throttle = approach(this.intent.throttle, 1, this.cfg.throttleRamp * dt);
+      } else if (any) {
+        if (regrip) {
+          // fist just opened — could be a re-grip; hold
+        } else {
+          // deliberate open palm → brake
+          this.intent.throttle = Math.max(0, this.intent.throttle - 5 * dt);
+          this.intent.brake = approach(this.intent.brake, 1, this.cfg.brakeRamp * dt);
+        }
+      } else {
+        // nothing visible inside the loss grace: coast
+        this.intent.throttle = Math.max(0, this.intent.throttle - this.cfg.coastDecay * dt);
+        this.intent.brake = approach(this.intent.brake, 0, this.cfg.brakeRamp * dt);
+      }
+    } else if (handsLost) {
       // AUTO-HOLD: lift throttle, gentle brake, hold/decay steering
       this.intent.throttle = Math.max(0, this.intent.throttle - 5 * dt);
       this.intent.brake = approach(this.intent.brake, this.cfg.autoHoldBrake, 2 * dt);
     } else if (inDrive) {
       this.intent.brake = approach(this.intent.brake, 0, 5 * dt);
       this.intent.throttle = approach(this.intent.throttle, 1, this.cfg.throttleRamp * dt);
-    } else if (regrip || partialHold) {
+    } else if (regrip && oneFist || partialHold) {
       // one palm opened mid-corner (hand-over-hand) or one hand flickered
       // out of frame: hold everything
     } else if (noFist && both) {
@@ -359,7 +421,12 @@ export class GestureSolver {
       this.intent.brake = approach(this.intent.brake, 0, this.cfg.brakeRamp * dt);
     }
 
-    this.conf = both ? pair.confidence * zone : any ? pair.confidence * 0.5 * zone : 0;
+    const full = both || (this.oneHanded && any);
+    this.conf = full
+      ? pair.confidence * zone
+      : any
+        ? pair.confidence * 0.5 * zone
+        : 0;
   }
 
   private zeroPedals(dt: number): void {
