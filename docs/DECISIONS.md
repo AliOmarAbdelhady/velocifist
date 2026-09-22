@@ -58,3 +58,13 @@ Velocity + fist — encodes the signature mechanic. Repo `velocifist`, private. 
 **Date:** 2026-09-22 · **Status:** Accepted (merged from Codex plan)
 
 M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determinism hash tests. Measure before art; every later milestone cites its gate numbers.
+
+## ADR-007 — M4 world: world-space curved spine + road-frame traffic mapping
+
+**Date:** 2026-09-22 · **Status:** Accepted
+
+**Decision:** The road is a seeded, chunk-streamed curved spine integrated in WORLD space (RK2 on heading κ(s), 256 m chunks, 4 m samples, gentle modules only: |Δθ| ≤ 0.26 rad/chunk ⇒ peak curvature ≥ ~740 m radius — always drivable at highway speed). The player's physics stays honest world-space (real steering through bends, real lateral g); traffic agents live in ROAD space — (s = arclength, lat = lateral, dir = ±1) — and are mapped onto the spine each tick for world-space swept collision and rendering. "Ahead" = larger s (smaller z). Oncoming agents (dir −1) close at pu + speed in every s-space rule, which makes oncoming lanes naturally lethal and never a fair escape. Floating origin: pure +4096 m z-translation whenever raw z < −4096 (exact, deterministic; keeps float32 render precision on 20 km runs).
+
+**Alternatives rejected:** (a) road-frame player physics with injected centrifugal force — a full rewrite of every validated M1 gate for no player-facing gain; (b) visually-fake curves — dishonest, breaks traffic coherence; (c) clothoid segments — analytic inversion cost with no perceptible benefit at R ≥ 700 m.
+
+**Consequences:** cumulative heading self-centres (bias past ±0.5 rad) so z stays monotone — the projection's −z heuristics rely on it; features (modules/zones) chain hEnd so chunkFeature(i) is a pure function of (seed, i) — the renderer can query ahead of the sim without changing the world (PILL 049). Car takes an optional `guide` (null = straight road) for off-road/wall in the road frame; all M1 tests run guide-free unchanged.

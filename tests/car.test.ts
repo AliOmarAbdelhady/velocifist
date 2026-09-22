@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { Car, type CarTune } from '../src/sim/car';
 import { CAR_TUNES } from '../src/sim/carTunes';
+import { RoadSystem, CHUNK_LEN } from '../src/sim/road';
 import type { DriverIntent } from '../src/sim/intent';
 
 const DT = 1 / 60;
@@ -180,3 +181,61 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
 
 // keep tune objects referenced for type-checking the import shape
 export const _tunes: readonly CarTune[] = CAR_TUNES;
+
+describe('road guide (M4 curved world)', () => {
+  it('a road-following driver holds the lane through bends; the wall caps excursions', () => {
+    // find a bending chunk on a fixed-seed desert spine and drop the car on it
+    const road = new RoadSystem({ seed: 606, theme: 'desert' });
+    road.ensureTo(CHUNK_LEN * 12);
+    let s0 = 0;
+    const sp = { x: 0, z: 0, heading: 0 };
+    for (let i = 3; i < 12; i++) {
+      if (road.chunkFeature(i).dTheta !== 0) {
+        s0 = i * CHUNK_LEN;
+        break;
+      }
+    }
+    road.sample(s0, sp);
+    const car = new Car(CAR_TUNES[0]);
+    car.guide = road;
+    car.x = sp.x;
+    car.z = sp.z;
+    car.heading = sp.heading;
+    car.u = 28;
+    const pr = { s: 0, lat: 0 };
+    let maxLat = 0;
+    let minU = 99;
+    for (let i = 0; i < 60 * 40; i++) {
+      // cascade driver in the ROAD frame: hold heading ≈ spine heading, lat ≈ 0
+      road.project(car.x, car.z, pr);
+      road.sample(pr.s + 16, sp); // look-ahead spine point
+      const targetHeading = sp.heading - 0.05 * pr.lat;
+      let steer = 2.4 * (targetHeading - car.heading) - 0.7 * car.omega;
+      steer = Math.max(-0.5, Math.min(0.5, steer));
+      car.step(DT, { steer, throttle: car.u < 36 ? 0.55 : 0, brake: car.u > 40 ? 0.3 : 0 });
+      road.project(car.x, car.z, pr);
+      maxLat = Math.max(maxLat, Math.abs(pr.lat));
+      minU = Math.min(minU, car.u);
+    }
+    // on the asphalt through the bends, and the wall never lets |lat| run away
+    const wall = CAR_TUNES[0].roadHalfWidth + 0.9;
+    expect(maxLat).toBeLessThanOrEqual(wall + 0.05);
+    expect(minU).toBeGreaterThan(20); // driving, not beached
+    expect(Number.isFinite(car.x + car.z + car.u)).toBe(true);
+  });
+
+  it('guide changes nothing on a straight road (lat == x)', () => {
+    const road = RoadSystem.straight();
+    const car = new Car(CAR_TUNES[0]);
+    car.guide = road;
+    car.u = 30;
+    const ref = new Car(CAR_TUNES[0]);
+    ref.u = 30;
+    for (let i = 0; i < 60 * 10; i++) {
+      const intent = { steer: 0.05 * Math.sin(i * 0.02), throttle: 0.5, brake: 0 };
+      car.step(DT, intent);
+      ref.step(DT, intent);
+    }
+    expect(car.hash()).toBe(ref.hash()); // identical physics, straight guide
+  });
+});

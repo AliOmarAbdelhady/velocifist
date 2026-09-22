@@ -11,6 +11,7 @@
 // not scripts. Semi-implicit Euler at a fixed step; no allocations in step().
 
 import type { DriverIntent } from './intent';
+import type { Projection, RoadGuide, SpinePoint } from './road';
 
 export interface CarTune {
   id: string;
@@ -78,6 +79,10 @@ function smoothstep(e0: number, e1: number, x: number): number {
 
 const GEAR_FRACTIONS = [0, 0.085, 0.165, 0.25, 0.345, 0.47, 0.62, 1.0001];
 
+// reused projection scratch (module scope: zero allocation per step)
+const CAR_PROJ: Projection = { s: 0, lat: 0 };
+const CAR_SPINE: SpinePoint = { x: 0, z: 0, heading: 0 };
+
 export class Car {
   // world pose
   x = 0;
@@ -96,6 +101,9 @@ export class Car {
   rearSlip = 0; // rear-axle lateral saturation 0..1 (drift FX later)
   gear = 1; // 1..7
   rpmNorm = 0; // 0..1 (engine audio in M6)
+  /** Curved-world guide (M4): when set, off-road + soft wall use the lateral
+   *  offset from the road spine instead of |x|. Null = straight road (tests). */
+  guide: RoadGuide | null = null;
   readonly tune: CarTune;
 
   constructor(tune: CarTune) {
@@ -106,7 +114,17 @@ export class Car {
     const t = this.tune;
 
     // ---- surface + aero ----
-    const offRoad = Math.abs(this.x) > t.roadHalfWidth;
+    // curved world: measure the road-frame lateral offset when a guide is set
+    let latAbs: number;
+    let latSigned = 0;
+    if (this.guide) {
+      this.guide.project(this.x, this.z, CAR_PROJ);
+      latSigned = CAR_PROJ.lat;
+      latAbs = Math.abs(latSigned);
+    } else {
+      latAbs = Math.abs(this.x);
+    }
+    const offRoad = latAbs > t.roadHalfWidth;
     const gripScale = offRoad ? 0.55 : 1;
     // downforce: supercars literally stick more the faster they go
     const speedFrac = Math.min(1, Math.abs(this.u) / t.vMax);
@@ -197,8 +215,30 @@ export class Car {
 
     // soft guardrail (real OBB collision lands in M3)
     const wall = t.roadHalfWidth + 0.9;
-    if (Math.abs(this.x) > wall) {
-      this.x = Math.sign(this.x) * wall;
+    if (this.guide) {
+      if (latAbs > wall - 2) {
+        // near/past the rail on a curve: re-project AFTER integration (the
+        // start-of-step projection would reposition against a stale spine point)
+        this.guide.project(this.x, this.z, CAR_PROJ);
+        latSigned = CAR_PROJ.lat;
+        latAbs = Math.abs(latSigned);
+      }
+    } else {
+      latSigned = this.x; // fresh post-integration position
+      latAbs = Math.abs(latSigned);
+    }
+    if (latAbs > wall) {
+      if (this.guide) {
+        // push back onto the corridor in the road frame (right = (cos h, sin h))
+        this.guide.sample(CAR_PROJ.s, CAR_SPINE);
+        const rx = Math.cos(CAR_SPINE.heading);
+        const rz = Math.sin(CAR_SPINE.heading);
+        const newLat = Math.sign(latSigned) * wall;
+        this.x = CAR_SPINE.x + rx * newLat;
+        this.z = CAR_SPINE.z + rz * newLat;
+      } else {
+        this.x = Math.sign(this.x) * wall;
+      }
       this.w *= -0.25;
       this.u *= 0.965;
       this.omega *= 0.6;

@@ -2,9 +2,9 @@
 
 > Updated at the end of every work session. ✅ done · 🔶 partial · ⬜ not started.
 
-**Last updated:** 2026-09-22 (M3 session 4 — complete)
-**Current milestone:** M3 — Traffic & Collision ✅ (73/73 tests incl. 60-min fairness soak; live feel pending user run)
-**Next step:** user plays with traffic (`npm run dev`, port 5173 — not 5199); then "continue" → M4 (world streaming + 3 environments)
+**Last updated:** 2026-09-22 (M4 session 6 — complete)
+**Current milestone:** M4 — World & Environments ✅ (98/98 tests; browser-verified 60 fps / 18 draws / 0.2 ms chunks)
+**Next step:** user drives the three worlds (`npm run dev` port 5173; T cycles theme, ?theme=neon|desert pins one); then "continue" → M5 (scoring, damage, persistence, garage)
 
 ## Milestones
 
@@ -14,7 +14,7 @@
 | M1 | Vehicle physics + chase camera feel | ✅ done | 30/30 validation tests; fun panel on user |
 | M2 ⭐ | Hand-tracking core (worker, MediaPipe, gestures, calibration) | 🔶 code-complete | scripted gates 56/56; live camera half = user |
 | M3 | Traffic AI + swept collision + near-miss detection | ✅ done | soak 0 violations; 73/73 |
-| M4 | World streaming + 3 environments | ⬜ | |
+| M4 | World streaming + 3 environments | ✅ done | 98/98; curved+straight soaks clean; gates green |
 | M5 | Scoring/damage/persistence/garage | ⬜ | |
 | M6 | Art + audio pass, quality tiers | ⬜ | |
 | M7 | Difficulty director + events + telemetry | ⬜ | |
@@ -70,6 +70,13 @@
 - [x] Flow wiring: camera explainer → wizard → drive; keyboard-only fallback path; HUD input line
 - [x] Tests 56/56 · build green (130.9 kB gzip main + 144 kB worker; assets verified in dist)
 - [ ] **LIVE GATES (user, PLAN §5.9):** wizard mean error, latency readout, crossing feel, false-brake feel, dropout grace — report back for tuning
+
+### Session 6 (2026-09-22, M4) — world & environments complete
+- RoadSystem (curved spine, ADR-007), DifficultyDirector skeleton, car RoadGuide, traffic s/lat/dir refactor with oncoming lanes + relative collision sweep.
+- Render: ribbon + zone-aware markings + rails, 3 themed environments (sky shader/fog/lights/props), construction cones (knockable), scene rewrite, world HUD line, T-key theme cycle.
+- 98/98 (25 new: road 14, director 6, car +2, traffic reworked 12 incl. curved soak + head-on tunneling + oncoming zones).
+- Real bugs caught: κ(s) global-vs-local frame (curves integrated to zero), projection walk outrunning generation + directional-walk vertex bias, stop-distance fairness model (7 soak violations), oncoming hysteresis below p, wall freshness, water under ground, markings lost to tint multiply (PILLs 046–056).
+- Browser-verified live: 60 fps, 17–19 draw calls, ~9 k tris, chunk gen 0.1–0.2 ms; markings/ocean/rails confirmed by zoomed screenshot review.
 
 ### Session 5 (2026-09-22, M3) — traffic + collision complete
 - TrafficSystem, collision, near-miss, instanced renderer, wiring; 73/73 (17 new).

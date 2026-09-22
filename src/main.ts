@@ -8,6 +8,8 @@ import { createLoop } from './core/loop';
 import { Car } from './sim/car';
 import { CAR_TUNES } from './sim/carTunes';
 import { TrafficSystem } from './sim/traffic';
+import { RoadSystem, type ThemeId } from './sim/road';
+import { DifficultyDirector } from './sim/director';
 import { createKeyboard } from './input/keyboard';
 import { InputArbiter } from './input/arbiter';
 import { HandTracker } from './input/handTracker';
@@ -24,6 +26,10 @@ const camlostReason = document.getElementById('camlostReason')!;
 const pipwrap = document.getElementById('pipwrap')!;
 const pipMount = document.getElementById('pipMount')!;
 const wizardRoot = document.getElementById('wizard')!;
+
+const THEME_ORDER: ThemeId[] = ['coastal', 'neon', 'desert'];
+const urlTheme = new URLSearchParams(location.search).get('theme') as ThemeId | null;
+let theme: ThemeId = urlTheme && THEME_ORDER.includes(urlTheme) ? urlTheme : 'coastal';
 
 overlay.addEventListener(
   'click',
@@ -140,19 +146,30 @@ function startLoop(
   getPip: () => PipRenderer | null,
   note?: string,
 ): void {
+  // world: seeded curved spine + themed environment (non-repeating per run)
+  const runSeed = (Date.now() & 0x7fffffff) >>> 0;
+  const road = new RoadSystem({ seed: runSeed, theme });
+  const director = new DifficultyDirector(runSeed);
+
   let car = new Car(CAR_TUNES[0]);
+  car.guide = road;
   const keyboard = createKeyboard();
   const arbiter = new InputArbiter();
-  const gameScene = new GameScene(CAR_TUNES[0]);
+  const gameScene = new GameScene(CAR_TUNES[0], road, theme, runSeed);
   const hud = new DevHud();
-  const traffic = new TrafficSystem();
+  const traffic = new TrafficSystem(
+    { seed: runSeed, laneCount: road.laneCount, laneWidth: road.laneWidth },
+    road,
+  );
   let nearMissTotal = 0;
   let crashTotal = 0;
+  let coneHits = 0;
   if (note) hud.note(note);
 
   const switchCar = (index: number): void => {
     const old = car;
     car = new Car(CAR_TUNES[index]);
+    car.guide = road;
     car.x = old.x;
     car.z = old.z;
     car.heading = old.heading;
@@ -160,8 +177,15 @@ function startLoop(
     gameScene.setCarTune(CAR_TUNES[index]);
   };
 
+  const cycleTheme = (): void => {
+    theme = THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length];
+    gameScene.setTheme(theme);
+    hud.note(`theme → ${theme} (visuals only — zone layout keeps the run's seed)`);
+  };
+
   const onKey = (e: KeyboardEvent): void => {
     if (e.code === 'KeyC') gameScene.cycleCamera();
+    else if (e.code === 'KeyT') cycleTheme();
     else if (e.code === 'Digit1') switchCar(0);
     else if (e.code === 'Digit2') switchCar(1);
     else if (e.code === 'Digit3') switchCar(2);
@@ -185,6 +209,23 @@ function startLoop(
       ph = car.heading;
       car.step(dt, arbiter.intent);
       traffic.update(dt, car, px, pz);
+      director.tick(dt);
+      for (const c of traffic.takeCrashes()) {
+        crashTotal++;
+        director.registerCrash();
+        void c;
+      }
+      for (const nm of traffic.takeNearMisses()) {
+        if (nm.tier === 'INCHES' || nm.tier === 'VERY_CLOSE' || nm.tier === 'NEAR') nearMissTotal++;
+      }
+      // floating origin: pure +z translation, exact
+      const dz = road.maybeRebase(car.z);
+      if (dz !== 0) {
+        car.z += dz;
+        pz += dz;
+        traffic.shiftWorld(dz);
+        gameScene.rig.rebase(dz);
+      }
     },
     render(alpha, frameDt) {
       const tracker = getTracker();
@@ -194,15 +235,12 @@ function startLoop(
         z: pz + (car.z - pz) * alpha,
         heading: ph + (car.heading - ph) * alpha,
       };
-      gameScene.update(pose, car, traffic, frameDt, performance.now() / 1000);
+      coneHits += gameScene.update(pose, car, traffic, frameDt, performance.now() / 1000);
       pip?.draw();
-      for (const nm of traffic.takeNearMisses()) {
-        if (nm.tier === 'INCHES' || nm.tier === 'VERY_CLOSE' || nm.tier === 'NEAR') nearMissTotal++;
-      }
-      for (const c of traffic.takeCrashes()) {
-        void c;
-        crashTotal++;
-      }
+      const pS = traffic.playerS;
+      const chunk = Math.floor(pS / 256);
+      const onc = road.oncomingAt(pS);
+      const zone = onc > 0 ? 'ONCOMING ×2' : road.chunkFeature(chunk).construction ? 'CONSTRUCTION' : 'clear';
       const st = tracker?.solver.state;
       hud.update(frameDt, gameScene.renderer, car.u, car.x, {
         carName: car.tune.name,
@@ -215,6 +253,7 @@ function startLoop(
           ? `${arbiter.source} ${st ? st.status : ''} ${tracker.info.latencyMs.toFixed(0)}ms ${tracker.info.delegate}`
           : arbiter.source,
         traffic: `${nearMissTotal} near-miss · ${crashTotal} crashes · ${traffic.agents.filter((a) => a.active).length} cars`,
+        world: `${gameScene.themeName} · s ${pS.toFixed(0)} · chunk ${chunk} · ${zone} · gen ${road.maxBuildMs.toFixed(2)}ms${coneHits > 0 ? ` · cones ${coneHits}` : ''}`,
       });
     },
   });

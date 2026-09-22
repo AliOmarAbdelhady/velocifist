@@ -41,17 +41,28 @@ export const FAMILIES: readonly FamilyDef[] = [
   { id: 'truck', halfW: 1.25, halfL: 5.4, vMin: 19, vMax: 23, aMax: 0.8, bComfort: 1.5, headwayT: 2.2, s0: 3.4, laneChangeEagerness: 0.06, massRatio: 3.0 },
 ];
 
-/** Pool slot: `active` agents are simulated + rendered. */
+/** Pool slot: `active` agents are simulated + rendered.
+ *  Primary state is ROAD-frame (M4): s (arclength, +forward), lat (lateral
+ *  offset, +right), dir (+1 same as player, −1 oncoming). World x/z/heading
+ *  are derived from the spine each tick (collision + rendering read them);
+ *  KNOCKED agents switch to pure world ballistics. */
 export interface TrafficAgent {
   active: boolean;
   id: number;
   family: number;
   paint: number;
-  /** world position (z decreases with travel — same convention as the player) */
+  /** road frame */
+  s: number;
+  lat: number;
+  dir: 1 | -1;
+  /** derived world pose (z decreases with travel — same convention as the player) */
   x: number;
   z: number;
   heading: number; // rad; 0 = travelling −z; spins when KNOCKED
-  speed: number; // m/s along −z
+  /** world displacement this tick (relative-sweep bookkeeping, M4) */
+  mdx: number;
+  mdz: number;
+  speed: number; // m/s along the travel direction (always ≥ 0)
   desiredSpeed: number;
   state: TrafficState;
   lane: number;

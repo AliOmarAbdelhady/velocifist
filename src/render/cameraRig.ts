@@ -41,6 +41,12 @@ export class CameraRig {
     this.vel.set(0, 0, 0);
   }
 
+  /** Floating-origin shift (M4): translate internal world-frame state by +dz. */
+  rebase(dz: number): void {
+    this.pos.z += dz;
+    this.look.z += dz;
+  }
+
   update(dt: number, c: RigInput, vMax: number): void {
     const speedFrac = Math.min(Math.abs(c.u) / vMax, 1);
     const sinH = Math.sin(c.heading);
