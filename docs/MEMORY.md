@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-09-22 — M0 session 1 (foundation complete)
+
+- **PILL 008 · M0 DONE:** Fixed-timestep loop (`src/core/loop.ts`: accumulator + alpha interpolation + `MAX_FRAME_DT 0.25` + `MAX_STEPS_PER_FRAME 10` panic guard + zero-alloc out-param). Deterministic mule (`src/sim/vehicle.ts`). Keyboard (reused intent obj). Scene (`src/render/scene.ts`). Dev HUD benchmark. 12/12 tests, build 120 kB gzip. Commit `5112a92` pushed.
+- **PILL 009 · RENDER CONVENTIONS (locked):** car travels **-z**; camera behind at **+z** looking -z; **world +x = screen right**; `car.rotation.y = -heading`; road scroll `roadTex.offset.y = (distance / 24) % 1` (tile = 24 m; car kept at z=0, texture scrolls — no float drift). If road ever scrolls the wrong way visually, flip that sign.
+- **PILL 010 · GOTCHA (fixed):** kinematic coast must decel all the way to 0 — conditional coast below a speed threshold leaves residual creep (quadratic drag alone ≈ 0.0002 m/s² at crawl = never stops). Test caught it.
+- **PILL 011 · GOTCHA:** TS strict — a `: void` arrow with expression body `down.delete(x)` fails (boolean → void). Use block bodies for void-annotated listeners.
+- **PILL 012 · DEPS:** three ^0.170.0, vite ^5.4.21, vitest ^2.1.x, typescript ^5.6, @types/three ^0.170. Node v26.8.1. npm warned about esbuild postinstall not in allowScripts — harmless so far (build works).
+- **PILL 013 · M0 AC:** determinism = CI test ✅; 60 FPS on Iris Xe = **user must run `npm run dev` and eyeball the HUD** (scene ~11 draw calls — massive headroom, expected trivially 60).
+
 ## 2026-09-22 — project creation
 
 - **PILL 001 · IDENTITY:** Game = VELOCIFIST (`velocifist`). Name = velocity + fist (the core mechanic: fists = throttle). Working title "OVERDRIVE AR" retired. Repo: private GitHub `AliOmarAbdelhady/velocifist`. Local: `/home/ali/velocifist`.
