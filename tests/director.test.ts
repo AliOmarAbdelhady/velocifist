@@ -4,17 +4,17 @@
 import { describe, expect, it } from 'vitest';
 import { DifficultyDirector, densityAt, eventPeriodSec } from '../src/sim/director';
 
-describe('PLAN formulas', () => {
-  it('density ramps 8 → 22 veh/km/lane over 4 minutes', () => {
-    expect(densityAt(0)).toBeCloseTo(8, 6);
-    expect(densityAt(240)).toBeCloseTo(22, 6);
-    expect(densityAt(600)).toBeCloseTo(22, 6); // clamped
+describe('relaxed formulas (ADR-008 easy-first)', () => {
+  it('density ramps gently 6.5 → 9 veh/km/lane over 4 minutes, then flat', () => {
+    expect(densityAt(0)).toBeCloseTo(6.5, 6);
+    expect(densityAt(240)).toBeCloseTo(9, 6);
+    expect(densityAt(600)).toBeCloseTo(9, 6); // clamped — no death pacing
     expect(densityAt(120)).toBeGreaterThan(densityAt(60));
   });
 
-  it('event period tightens 40 s → 18 s', () => {
+  it('event period tightens 40 s → 24 s', () => {
     expect(eventPeriodSec(0)).toBeCloseTo(40, 6);
-    expect(eventPeriodSec(240)).toBeCloseTo(18, 6);
+    expect(eventPeriodSec(240)).toBeCloseTo(24, 6);
   });
 });
 
@@ -31,9 +31,9 @@ describe('DifficultyDirector', () => {
         const b = mk(t).featurePolicy(theme);
         expect(a).toEqual(b);
         expect(a.oncomingP).toBeGreaterThanOrEqual(0);
-        expect(a.oncomingP).toBeLessThanOrEqual(0.7);
+        expect(a.oncomingP).toBeLessThanOrEqual(0.5);
         expect(a.constructionP).toBeGreaterThanOrEqual(0.04);
-        expect(a.constructionP).toBeLessThanOrEqual(0.18);
+        expect(a.constructionP).toBeLessThanOrEqual(0.12);
         expect(a.curveBias).toBeGreaterThanOrEqual(0.8);
         expect(a.curveBias).toBeLessThanOrEqual(1.7);
       }

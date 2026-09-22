@@ -1,15 +1,16 @@
-// VELOCIFIST — bootstrap (M2 flow + camera-loss recovery):
-// START → camera explainer → (optional) camera + calibration wizard → drive
-// with the input arbiter merging hands (primary) and keyboard (fallback).
-// If the camera dies mid-run: overlay offers Retry (calibration is persisted,
-// no re-wizard needed) or continuing on keyboard.
+// VELOCIFIST — bootstrap + run lifecycle (M5):
+// START → GARAGE → camera choice → (calibration) → RUN → WRECK → RESULTS
+// → RETRY (R / Enter — instant, same input mode) or garage (G).
+// EASY-FIRST (ADR-008): assists always on, relaxed traffic, no death pacing.
 
-import { createLoop } from './core/loop';
-import { Car } from './sim/car';
+import { createLoop, type Loop } from './core/loop';
+import { Car, type CarTune } from './sim/car';
 import { CAR_TUNES } from './sim/carTunes';
 import { TrafficSystem } from './sim/traffic';
 import { RoadSystem, type ThemeId } from './sim/road';
-import { DifficultyDirector } from './sim/director';
+import { DifficultyDirector, densityAt } from './sim/director';
+import { ScoringSystem } from './sim/scoring';
+import { DamageSystem } from './sim/damage';
 import { createKeyboard } from './input/keyboard';
 import { InputArbiter } from './input/arbiter';
 import { HandTracker } from './input/handTracker';
@@ -17,6 +18,10 @@ import { GameScene } from './render/scene';
 import { DevHud } from './render/devHud';
 import { PipRenderer } from './render/pip';
 import { CalibrationWizard } from './ui/calibrationWizard';
+import { GameHud } from './ui/hud';
+import { ResultsScreen } from './ui/results';
+import { Garage } from './ui/garage';
+import { PersistenceService } from './persist/local';
 import { CAM_MODES } from './render/cameraRig';
 
 const overlay = document.getElementById('overlay')!;
@@ -29,28 +34,276 @@ const wizardRoot = document.getElementById('wizard')!;
 
 const THEME_ORDER: ThemeId[] = ['coastal', 'neon', 'desert'];
 const urlTheme = new URLSearchParams(location.search).get('theme') as ThemeId | null;
-let theme: ThemeId = urlTheme && THEME_ORDER.includes(urlTheme) ? urlTheme : 'coastal';
+const pinnedTheme: ThemeId | null = urlTheme && THEME_ORDER.includes(urlTheme) ? urlTheme : null;
+let nextTheme: ThemeId = pinnedTheme ?? 'coastal';
 
-overlay.addEventListener(
-  'click',
-  () => {
-    overlay.classList.add('hidden');
-    camchoice.classList.remove('hidden');
-  },
-  { once: true },
+const persist = new PersistenceService();
+
+// ---------------------------------------------------------------- game shell
+
+type Phase = 'driving' | 'wrecked' | 'results';
+
+class Game {
+  readonly scene: GameScene;
+  readonly themeName: string;
+  private readonly devhud = new DevHud();
+  private readonly hud = new GameHud();
+  private readonly resultsScreen = new ResultsScreen();
+  private readonly keyboard = createKeyboard();
+  private readonly arbiter = new InputArbiter();
+  private readonly onRetryClick = (): void => this.retry();
+  private readonly onGarageClick = (): void => this.toGarage();
+
+  private loop: Loop | null = null;
+  private road: RoadSystem;
+  private traffic: TrafficSystem;
+  private car: Car;
+  private scoring: ScoringSystem;
+  private damage: DamageSystem;
+  private director: DifficultyDirector;
+  private theme: ThemeId;
+  private phase: Phase = 'driving';
+  private runT = 0;
+  private densityTimer = 0;
+  private px = 0;
+  private pz = 0;
+  private ph = 0;
+  private nearMissTotal = 0;
+  private crashTotal = 0;
+  private coneHits = 0;
+
+  constructor(
+    private readonly getTracker: () => HandTracker | null,
+    private readonly getPip: () => PipRenderer | null,
+    tune: CarTune,
+    note?: string,
+  ) {
+    this.theme = pinnedTheme ?? nextTheme;
+    if (!pinnedTheme) {
+      nextTheme = THEME_ORDER[(THEME_ORDER.indexOf(nextTheme) + 1) % THEME_ORDER.length];
+    }
+    const runSeed = (Date.now() & 0x7fffffff) >>> 0;
+    this.road = new RoadSystem({ seed: runSeed, theme: this.theme });
+    this.director = new DifficultyDirector(runSeed);
+    this.car = new Car(tune);
+    this.car.guide = this.road;
+    this.traffic = new TrafficSystem(
+      { seed: runSeed, laneCount: this.road.laneCount, laneWidth: this.road.laneWidth },
+      this.road,
+    );
+    this.scoring = new ScoringSystem();
+    this.damage = new DamageSystem(tune.healthMax);
+    this.scene = new GameScene(tune, this.road, this.theme, runSeed);
+    this.themeName = this.scene.themeName;
+    if (note) this.devhud.note(note);
+
+    window.addEventListener('keydown', this.onKey);
+    document.getElementById('btnRetryRun')!.addEventListener('click', this.onRetryClick);
+    document.getElementById('btnToGarage')!.addEventListener('click', this.onGarageClick);
+    this.hud.show(true);
+    this.loop = createLoop({
+      step: (dt) => this.step(dt),
+      render: (alpha, frameDt) => this.render(alpha, frameDt),
+    });
+    this.loop.start();
+  }
+
+  private step(dt: number): void {
+    this.keyboard.update(dt);
+    const t = performance.now() / 1000;
+    const tracker = this.getTracker();
+    const handIntent = tracker ? tracker.solver.intent : null;
+    const handConf = tracker ? tracker.solver.state.confidence : 0;
+    this.arbiter.update(handIntent, handConf, this.keyboard.intent, t);
+
+    this.px = this.car.x;
+    this.pz = this.car.z;
+    this.ph = this.car.heading;
+
+    if (this.phase === 'results') {
+      // background stays alive but the run is over
+      this.traffic.update(dt, this.car, this.px, this.pz);
+      return;
+    }
+
+    const wrecked = this.phase === 'wrecked';
+    const intent = wrecked
+      ? { steer: this.arbiter.intent.steer * 0.4, throttle: 0, brake: 0.35 }
+      : this.arbiter.intent;
+
+    this.car.step(dt, intent);
+    this.traffic.update(dt, this.car, this.px, this.pz);
+
+    // ---- events: main owns the drain order (scoring + damage both feed) ----
+    const crashes = this.traffic.takeCrashes();
+    const nearMisses = this.traffic.takeNearMisses();
+    const passes = this.traffic.takePasses();
+    this.runT += dt;
+    this.director.tick(dt);
+    this.scoring.update(dt, this.car);
+    this.scoring.onNearMisses(nearMisses);
+    this.scoring.onPasses(passes);
+    this.scoring.onCrashes(crashes.length);
+    this.nearMissTotal += nearMisses.length;
+    this.crashTotal += crashes.length;
+    for (const c of crashes) this.director.registerCrash();
+
+    const impulses = crashes.map((c) => c.impulse);
+    const events = this.damage.update(
+      dt,
+      impulses,
+      this.scoring.flowRegenClamped(dt, this.damage.health, this.damage.healthMax),
+    );
+    this.car.powerScale = this.damage.powerScale;
+    void events; // damage FX (smoke/sparks) land in M6
+
+    if (this.damage.wrecked && !wrecked && this.phase === 'driving') {
+      this.phase = 'wrecked';
+    }
+    if (this.phase === 'wrecked' && this.damage.wreckTimer > 2.2) {
+      this.phase = 'results';
+      this.hud.show(false);
+      this.resultsScreen.show(this.scoring, this.car, this.themeName, this.runT, persist);
+      return;
+    }
+
+    // gentle live density (EASY: relaxed ramp only)
+    this.densityTimer += dt;
+    if (this.densityTimer >= 1) {
+      this.densityTimer = 0;
+      this.traffic.setDensity(densityAt(this.runT));
+    }
+
+    // floating origin: pure +z translation, exact
+    const dz = this.road.maybeRebase(this.car.z);
+    if (dz !== 0) {
+      this.car.z += dz;
+      this.pz += dz;
+      this.traffic.shiftWorld(dz);
+      this.scene.rig.rebase(dz);
+    }
+  }
+
+  private render(alpha: number, frameDt: number): void {
+    const tracker = this.getTracker();
+    const pip = this.getPip();
+    const pose = {
+      x: this.px + (this.car.x - this.px) * alpha,
+      z: this.pz + (this.car.z - this.pz) * alpha,
+      heading: this.ph + (this.car.heading - this.ph) * alpha,
+    };
+    this.coneHits += this.scene.update(pose, this.car, this.traffic, frameDt, performance.now() / 1000);
+    pip?.draw();
+    if (this.phase !== 'results') this.hud.update(this.car, this.scoring, this.damage);
+
+    const pS = this.traffic.playerS;
+    const chunk = Math.floor(pS / 256);
+    const onc = this.road.oncomingAt(pS);
+    const zone = onc > 0 ? 'ONCOMING ×2' : this.road.chunkFeature(chunk).construction ? 'CONSTRUCTION' : 'clear';
+    const st = tracker?.solver.state;
+    this.devhud.update(frameDt, this.scene.renderer, this.car.u, this.car.x, {
+      carName: this.car.tune.name,
+      gear: this.car.gear,
+      rpmNorm: this.car.rpmNorm,
+      betaDeg: (this.car.beta * 180) / Math.PI,
+      latG: this.car.ayLast / 9.81,
+      camMode: CAM_MODES[this.scene.rig.mode],
+      input: tracker
+        ? `${this.arbiter.source} ${st ? st.status : ''} ${tracker.info.latencyMs.toFixed(0)}ms ${tracker.info.delegate}`
+        : this.arbiter.source,
+      traffic: `${this.nearMissTotal} near-miss · ${this.crashTotal} crashes · ${this.traffic.agents.filter((a) => a.active).length} cars`,
+      world: `${this.themeName} · s ${pS.toFixed(0)} · chunk ${chunk} · ${zone} · gen ${this.road.maxBuildMs.toFixed(2)}ms${this.coneHits > 0 ? ` · cones ${this.coneHits}` : ''}`,
+    });
+  }
+
+  private onKey = (e: KeyboardEvent): void => {
+    if (e.code === 'KeyC') this.scene.cycleCamera();
+    else if (e.code === 'KeyT') this.cycleTheme();
+    else if (e.code === 'Digit1') this.switchCar(0);
+    else if (e.code === 'Digit2') this.switchCar(1);
+    else if (e.code === 'Digit3') this.switchCar(2);
+    else if (this.phase === 'results' && (e.code === 'KeyR' || e.code === 'Enter')) {
+      this.retry();
+    } else if (this.phase === 'results' && e.code === 'KeyG') {
+      this.toGarage();
+    }
+  };
+
+  private switchCar = (index: number): void => {
+    const tune = CAR_TUNES[index];
+    if (!tune || !persist.progress.unlocks.includes(tune.id) || this.phase === 'results') return;
+    const old = this.car;
+    this.car = new Car(tune);
+    this.car.guide = this.road;
+    this.car.x = old.x;
+    this.car.z = old.z;
+    this.car.heading = old.heading;
+    this.car.u = old.u;
+    this.scene.setCarTune(tune);
+    this.damage = new DamageSystem(tune.healthMax);
+  };
+
+  private cycleTheme = (): void => {
+    const cur = THEME_ORDER.indexOf(this.theme);
+    this.theme = THEME_ORDER[(cur + 1) % THEME_ORDER.length];
+    this.scene.setTheme(this.theme);
+    this.devhud.note(`theme → ${this.theme} (visuals only — zone layout keeps the run's seed)`);
+  };
+
+  private retry(): void {
+    const tune = this.car.tune;
+    this.dispose();
+    launch(tune, this.getTracker, this.getPip);
+  }
+
+  private toGarage(): void {
+    this.dispose();
+    showGarage();
+  }
+
+  dispose(): void {
+    this.loop?.stop();
+    this.loop = null;
+    this.resultsScreen.hide();
+    this.hud.show(false);
+    this.scene.dispose();
+    window.removeEventListener('keydown', this.onKey);
+    document.getElementById('btnRetryRun')!.removeEventListener('click', this.onRetryClick);
+    document.getElementById('btnToGarage')!.removeEventListener('click', this.onGarageClick);
+  }
+}
+
+// -------------------------------------------------------------------- flow
+
+let currentGame: Game | null = null;
+
+const garage = new Garage(
+  persist,
+  (tune) => chooseInput(tune),
+  () => overlay.classList.remove('hidden'),
 );
 
-document.getElementById('btnKb')!.addEventListener('click', () => {
-  camchoice.classList.add('hidden');
-  boot(null);
-});
+function showGarage(): void {
+  garage.show(persist.settings.car);
+}
 
-document.getElementById('btnCam')!.addEventListener('click', () => {
-  camchoice.classList.add('hidden');
-  void startWithCamera();
-});
+function chooseInput(tune: CarTune): void {
+  camchoice.classList.remove('hidden');
+  const onCam = (): void => {
+    camchoice.classList.add('hidden');
+    void startWithCamera(tune);
+  };
+  const onKb = (): void => {
+    camchoice.classList.add('hidden');
+    launch(tune, null, null);
+  };
+  const bCam = document.getElementById('btnCam')!;
+  const bKb = document.getElementById('btnKb')!;
+  bCam.addEventListener('click', onCam, { once: true });
+  bKb.addEventListener('click', onKb, { once: true });
+}
 
-async function startWithCamera(): Promise<void> {
+async function startWithCamera(tune: CarTune): Promise<void> {
   const tracker = new HandTracker();
   // start() resolves only when the worker is genuinely READY (or classified error)
   await tracker.start();
@@ -59,13 +312,13 @@ async function startWithCamera(): Promise<void> {
     tracker.stop();
     showCamLost(
       why,
-      () => void startWithCamera(),
-      () => boot(null, `camera unavailable — ${why}. Keyboard mode.`),
+      () => void startWithCamera(tune),
+      () => launch(tune, null, null, `camera unavailable — ${why}. Keyboard mode.`),
     );
     return;
   }
   pipwrap.classList.remove('hidden');
-  let pip = new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, tracker);
+  const pip = new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, tracker);
 
   if (!tracker.solver.calibrated) {
     wizardRoot.classList.remove('hidden');
@@ -80,7 +333,7 @@ async function startWithCamera(): Promise<void> {
     document.body.appendChild(pipwrap); // PiP back to the corner
   }
 
-  bootWithRecovery(tracker, pip);
+  bootWithRecovery(tune, tracker, pip);
 }
 
 function showCamLost(reason: string, onRetry: () => void, onKeyboard: () => void): void {
@@ -96,14 +349,15 @@ function showCamLost(reason: string, onRetry: () => void, onKeyboard: () => void
   };
 }
 
-function bootWithRecovery(initialTracker: HandTracker, initialPip: PipRenderer): void {
+function bootWithRecovery(tune: CarTune, initialTracker: HandTracker, initialPip: PipRenderer): void {
   let tracker: HandTracker | null = initialTracker;
   let pip: PipRenderer | null = initialPip;
 
-  tracker.onLost = (reason: string): void => {
+  const onLost = (reason: string): void => {
     camlostReason.textContent = reason;
     camlost.classList.remove('hidden');
   };
+  initialTracker.onLost = onLost;
 
   document.getElementById('btnRetry')!.onclick = async (): Promise<void> => {
     camlost.classList.add('hidden');
@@ -118,10 +372,7 @@ function bootWithRecovery(initialTracker: HandTracker, initialPip: PipRenderer):
       pipwrap.classList.add('hidden');
       return;
     }
-    nt.onLost = (reason2: string): void => {
-      camlostReason.textContent = reason2;
-      camlost.classList.remove('hidden');
-    };
+    nt.onLost = onLost;
     tracker = nt;
     pip = new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, nt);
     pipwrap.classList.remove('hidden');
@@ -134,129 +385,29 @@ function bootWithRecovery(initialTracker: HandTracker, initialPip: PipRenderer):
     pipwrap.classList.add('hidden');
   };
 
-  startLoop(() => tracker, () => pip);
+  launch(tune, () => tracker, () => pip);
 }
 
-function boot(tracker: HandTracker | null, note?: string): void {
-  startLoop(() => tracker, () => null, note);
-}
-
-function startLoop(
-  getTracker: () => HandTracker | null,
-  getPip: () => PipRenderer | null,
+function launch(
+  tune: CarTune,
+  getTracker: (() => HandTracker | null) | null,
+  getPip: (() => PipRenderer | null) | null,
   note?: string,
 ): void {
-  // world: seeded curved spine + themed environment (non-repeating per run)
-  const runSeed = (Date.now() & 0x7fffffff) >>> 0;
-  const road = new RoadSystem({ seed: runSeed, theme });
-  const director = new DifficultyDirector(runSeed);
-
-  let car = new Car(CAR_TUNES[0]);
-  car.guide = road;
-  const keyboard = createKeyboard();
-  const arbiter = new InputArbiter();
-  const gameScene = new GameScene(CAR_TUNES[0], road, theme, runSeed);
-  const hud = new DevHud();
-  const traffic = new TrafficSystem(
-    { seed: runSeed, laneCount: road.laneCount, laneWidth: road.laneWidth },
-    road,
+  currentGame?.dispose();
+  currentGame = new Game(
+    getTracker ?? (() => null),
+    getPip ?? (() => null),
+    tune,
+    note,
   );
-  let nearMissTotal = 0;
-  let crashTotal = 0;
-  let coneHits = 0;
-  if (note) hud.note(note);
-
-  const switchCar = (index: number): void => {
-    const old = car;
-    car = new Car(CAR_TUNES[index]);
-    car.guide = road;
-    car.x = old.x;
-    car.z = old.z;
-    car.heading = old.heading;
-    car.u = old.u;
-    gameScene.setCarTune(CAR_TUNES[index]);
-  };
-
-  const cycleTheme = (): void => {
-    theme = THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length];
-    gameScene.setTheme(theme);
-    hud.note(`theme → ${theme} (visuals only — zone layout keeps the run's seed)`);
-  };
-
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.code === 'KeyC') gameScene.cycleCamera();
-    else if (e.code === 'KeyT') cycleTheme();
-    else if (e.code === 'Digit1') switchCar(0);
-    else if (e.code === 'Digit2') switchCar(1);
-    else if (e.code === 'Digit3') switchCar(2);
-  };
-  window.addEventListener('keydown', onKey);
-
-  let px = car.x;
-  let pz = car.z;
-  let ph = car.heading;
-
-  const loop = createLoop({
-    step(dt) {
-      keyboard.update(dt);
-      const t = performance.now() / 1000;
-      const tracker = getTracker();
-      const handIntent = tracker ? tracker.solver.intent : null;
-      const handConf = tracker ? tracker.solver.state.confidence : 0;
-      arbiter.update(handIntent, handConf, keyboard.intent, t);
-      px = car.x;
-      pz = car.z;
-      ph = car.heading;
-      car.step(dt, arbiter.intent);
-      traffic.update(dt, car, px, pz);
-      director.tick(dt);
-      for (const c of traffic.takeCrashes()) {
-        crashTotal++;
-        director.registerCrash();
-        void c;
-      }
-      for (const nm of traffic.takeNearMisses()) {
-        if (nm.tier === 'INCHES' || nm.tier === 'VERY_CLOSE' || nm.tier === 'NEAR') nearMissTotal++;
-      }
-      // floating origin: pure +z translation, exact
-      const dz = road.maybeRebase(car.z);
-      if (dz !== 0) {
-        car.z += dz;
-        pz += dz;
-        traffic.shiftWorld(dz);
-        gameScene.rig.rebase(dz);
-      }
-    },
-    render(alpha, frameDt) {
-      const tracker = getTracker();
-      const pip = getPip();
-      const pose = {
-        x: px + (car.x - px) * alpha,
-        z: pz + (car.z - pz) * alpha,
-        heading: ph + (car.heading - ph) * alpha,
-      };
-      coneHits += gameScene.update(pose, car, traffic, frameDt, performance.now() / 1000);
-      pip?.draw();
-      const pS = traffic.playerS;
-      const chunk = Math.floor(pS / 256);
-      const onc = road.oncomingAt(pS);
-      const zone = onc > 0 ? 'ONCOMING ×2' : road.chunkFeature(chunk).construction ? 'CONSTRUCTION' : 'clear';
-      const st = tracker?.solver.state;
-      hud.update(frameDt, gameScene.renderer, car.u, car.x, {
-        carName: car.tune.name,
-        gear: car.gear,
-        rpmNorm: car.rpmNorm,
-        betaDeg: (car.beta * 180) / Math.PI,
-        latG: car.ayLast / 9.81,
-        camMode: CAM_MODES[gameScene.rig.mode],
-        input: tracker
-          ? `${arbiter.source} ${st ? st.status : ''} ${tracker.info.latencyMs.toFixed(0)}ms ${tracker.info.delegate}`
-          : arbiter.source,
-        traffic: `${nearMissTotal} near-miss · ${crashTotal} crashes · ${traffic.agents.filter((a) => a.active).length} cars`,
-        world: `${gameScene.themeName} · s ${pS.toFixed(0)} · chunk ${chunk} · ${zone} · gen ${road.maxBuildMs.toFixed(2)}ms${coneHits > 0 ? ` · cones ${coneHits}` : ''}`,
-      });
-    },
-  });
-
-  loop.start();
 }
+
+overlay.addEventListener(
+  'click',
+  () => {
+    overlay.classList.add('hidden');
+    showGarage();
+  },
+  { once: true },
+);

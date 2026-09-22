@@ -224,10 +224,11 @@ describe('road guide (M4 curved world)', () => {
     expect(Number.isFinite(car.x + car.z + car.u)).toBe(true);
   });
 
-  it('guide changes nothing on a straight road (lat == x)', () => {
+  it('guide changes nothing on a straight road with assists off (lat == x)', () => {
     const road = RoadSystem.straight();
     const car = new Car(CAR_TUNES[0]);
     car.guide = road;
+    car.laneAssist = false;
     car.u = 30;
     const ref = new Car(CAR_TUNES[0]);
     ref.u = 30;
@@ -237,5 +238,22 @@ describe('road guide (M4 curved world)', () => {
       ref.step(DT, intent);
     }
     expect(car.hash()).toBe(ref.hash()); // identical physics, straight guide
+  });
+
+  it('EASY lane-keep assist holds a sloppy driver near lane centre', () => {
+    const road = RoadSystem.straight();
+    const car = new Car(CAR_TUNES[0]);
+    car.guide = road;
+    car.u = 30;
+    const pr = { s: 0, lat: 0 };
+    let maxLat = 0;
+    for (let i = 0; i < 60 * 60; i++) {
+      // aggressive sloppy steering — without assist this walks off the road
+      const intent = { steer: 0.22 * Math.sin(i * 0.021) + 0.1 * Math.sin(i * 0.11), throttle: 0.5, brake: 0 };
+      car.step(DT, intent);
+      road.project(car.x, car.z, pr);
+      maxLat = Math.max(maxLat, Math.abs(pr.lat));
+    }
+    expect(maxLat).toBeLessThan(3.0); // held near the centre line
   });
 });

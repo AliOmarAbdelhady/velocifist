@@ -24,6 +24,7 @@ import {
   type TrafficConfig,
   type NearMissEvent,
   type CrashEvent,
+  type PassEvent,
   type NearMissTier,
 } from './trafficTypes';
 import { sweptPlayerSAT, resolveHit, type Contact, type OBB } from './collision';
@@ -51,6 +52,10 @@ export class TrafficSystem {
     agentId: 0, impulse: 0, headOn: false,
   }));
   crashCount = 0;
+  readonly passes: PassEvent[] = Array.from({ length: 64 }, () => ({
+    agentId: 0, closingSpeed: 0, oncoming: false,
+  }));
+  passCount = 0;
 
   /** player road-frame pose, refreshed each update() (tests + HUD read these) */
   playerS = 0;
@@ -241,6 +246,8 @@ export class TrafficSystem {
     slot.nmTracked = false;
     slot.nmMinClearance = 99;
     slot.nmWasAhead = false;
+    slot.passCounted = false;
+    slot.hadContact = false;
     slot.mdx = 0;
     slot.mdz = 0;
     this.mapToWorld(slot);
@@ -263,6 +270,7 @@ export class TrafficSystem {
       lanePhase: 0, signal: 0, signalTimer: 0, changeTimer: 0,
       kvx: 0, kvz: 0, kspin: 0, knockedTimer: 0, chainDepth: 0,
       nmTracked: false, nmMinClearance: 99, nmWasAhead: false,
+      passCounted: false, hadContact: false,
     };
   }
 
@@ -471,6 +479,7 @@ export class TrafficSystem {
           headOn: nx * fx + nz * fz < -0.5,
         };
       }
+      a.hadContact = true;
       if (a.state !== 'KNOCKED') {
         a.state = 'KNOCKED';
         a.knockedTimer = 0;
@@ -496,6 +505,19 @@ export class TrafficSystem {
           const c = Math.abs(a.lat - this.playerLat) - (fam.halfW + pHalfW);
           a.nmMinClearance = Math.min(a.nmMinClearance, c);
         }
+      }
+      if (!a.passCounted && ds < -lenSum) {
+        // fully passed (agent now behind) — clean-pass event, once per
+        // encounter, only without contact on the way through
+        const closing = car.u - a.dir * a.speed;
+        if (!a.hadContact && closing > 2 && this.passCount < this.passes.length) {
+          this.passes[this.passCount++] = {
+            agentId: a.id,
+            closingSpeed: closing,
+            oncoming: a.dir < 0,
+          };
+        }
+        a.passCounted = true;
       }
       if (a.nmTracked && ds < -lenSum) {
         // fully passed (agent now behind) — fire once per encounter
@@ -561,5 +583,17 @@ export class TrafficSystem {
     const out = this.crashes.slice(0, this.crashCount);
     this.crashCount = 0;
     return out;
+  }
+
+  takePasses(): PassEvent[] {
+    if (this.passCount === 0) return [];
+    const out = this.passes.slice(0, this.passCount);
+    this.passCount = 0;
+    return out;
+  }
+
+  /** Live density knob (difficulty director, EASY: gentle variety only). */
+  setDensity(vehPerKmPerLane: number): void {
+    this.cfg.densityPerKmPerLane = clamp(vehPerKmPerLane, 0, 30);
   }
 }

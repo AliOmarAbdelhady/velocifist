@@ -68,3 +68,11 @@ M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determi
 **Alternatives rejected:** (a) road-frame player physics with injected centrifugal force — a full rewrite of every validated M1 gate for no player-facing gain; (b) visually-fake curves — dishonest, breaks traffic coherence; (c) clothoid segments — analytic inversion cost with no perceptible benefit at R ≥ 700 m.
 
 **Consequences:** cumulative heading self-centres (bias past ±0.5 rad) so z stays monotone — the projection's −z heuristics rely on it; features (modules/zones) chain hEnd so chunkFeature(i) is a pure function of (seed, i) — the renderer can query ahead of the sim without changing the world (PILL 049). Car takes an optional `guide` (null = straight road) for off-road/wall in the road frame; all M1 tests run guide-free unchanged.
+
+## ADR-008 — Easy-first design: assists always on, death pacing retired
+
+**Date:** 2026-09-22 · **Status:** Accepted (user directive: "very easy to play, forget about the 5 mins rule")
+
+**Decision:** VELOCIFIST is an easy, relaxed arcade cruiser. (a) Driving assists ship always-on: lane-keep assist (road-heading + lane-centre pull, full strength with quiet hands, 35% when steering deliberately), stronger yaw/slide damping, earlier counter-steer, forgiving guardrail grazes and grass. (b) The 4–6-minute elite death target is removed: density ramps 6.5→9 veh/km/lane over 4 min then flattens, oncoming zones are rarer (p .35), construction sparse. (c) Health/wreck still exists — mistakes still end runs — but FLOW regen (0.5 HP/s to 35% cap) and 0.8 s impact-window merging make survival the default. Risk stays opt-in via the near-miss scoring model (unchanged): thrill is how close YOU choose to shave.
+
+**Consequences:** PLAN v1.2 (pillar 4, §11.2, roadmap M7/M8 reworded). Raw-dynamics tests run with `laneAssist = false`; assist behaviour has its own gates (sloppy-driver centring). Scoring/balance numbers remain hypotheses for M8 comfort tuning rather than survival tuning.

@@ -10,6 +10,7 @@
 
 ## Changelog
 
+- **v1.2 (easy-first, user directive):** Design pillar 4 replaced — the 4–6-minute elite death target is RETIRED. The game is easy to play and easy to survive: driving assists always on (lane-keep + stronger stability), relaxed traffic density (6.5→9 veh/km/lane over 4 min, flat after), softer guardrail/grass consequences, rarer oncoming zones. Risk remains opt-in via near-miss scoring (ADR-008).
 - **v1.1 (merge):** Kept the browser architecture (Three.js + MediaPipe in-process), deterministic authored vehicle physics, archetype cars, game-feel machinery. Merged in from the Codex plan: AR terminology clarification; regrip-aware grip state machine (one open palm = regrip, second = brake, false-braking < 1% target); tester-diverse acceptance protocol (skin tones / sleeves / lighting); 95th-percentile latency & angle-error targets; score anti-exploit suite; swept body-to-body near-miss clearance; leaderboard partitioning + Practice mode; atomic saves; tunneling math & swept CCD requirement; vehicle-dynamics validation protocol (0–100, 100–0, slalom, yaw overshoot); benchmark-before-art discipline; realistic 3–6 month calendar estimate; drivetrain-personality car classes; IDM/MOBIL as formal traffic-model references.
 - **v1.0:** Original architecture and full system specs.
 
@@ -33,7 +34,7 @@
 | Speed + near-miss scoring, saved | Passive speed score + tiered near-miss bonuses (swept body-to-body clearance) + combo multiplier; versioned atomic localStorage saves |
 | Car health, crash → destroyed → lose | Impulse-based damage, 4 visual states, wreck finale |
 | Non-repetitive environments | 3 themes × time-of-day/weather × seeded chunks × event director |
-| Elite dies ~5 min | Telemetry-calibrated Difficulty Director (top-quartile median 4–6 min window) |
+| Easy, relaxed survival (v1.2) | Always-on assists + flat-capped difficulty; former 4–6 min death target retired (ADR-008) |
 | Multiple supercars | 3 archetype cars (lightweight RWD / AWD GT / track-focus widebody) with distinct physics personalities |
 | Laptop performance | Hard budgets (≤250 draw calls Low, instancing, zero-GC frame, quality auto-scaler), benchmark harness from M0 |
 | "High graphics" look | PBR-lite + graded environment lighting + speed language + one LUT final pass — not heavy post chains |
@@ -45,7 +46,7 @@
 1. **Hands are the interface.** Latency < 100 ms p95 end-to-end is a hard requirement; measure and display it.
 2. **Risk = reward.** Score scales with speed and proximity; safe driving is possible but boring.
 3. **Readable chaos.** Traffic is dense but fair: a solvable line always exists; deaths are the player's mistake, never the tracker's.
-4. **A run is 2–6 minutes.** Skilled players' typical ranked run ends in the 4–6 min window; exceptional runs remain possible; Practice mode for learning.
+4. **Easy to play, easy to survive (v1.2).** Driving assists are always on and difficulty never escalates to kill. Runs end when the player wrecks by their own mistake or chooses to stop; 2–6-minute sessions remain the natural rhythm (arm fatigue), not a death clock. Risk = reward stays OPT-IN: thrill comes from shaving cars closer and faster, not from the game pressuring you.
 5. **60 FPS on a normal laptop.** No frame ever waits on the webcam.
 
 ---
@@ -241,14 +242,12 @@ Variety layers: time-of-day × weather (lighting/fog/palette + particles), seede
 | FLOW | combo ≥ 5: passive ×1.5, +0.5 HP/s regen to 35% cap | state |
 Raw event counts + components stored per run (auditable). **Anti-exploit suite (tested):** tailgating without overtaking; re-entering the same gap; reversing; parking; collisions still counting as near misses; impossible spawn gaps. Leaderboards partitioned by car / assists / environment; normalize across partitions only with data. Practice mode: gentle traffic, no leaderboard claim.
 
-### 11.2 Difficulty director
+### 11.2 Variety director (v1.2 — former "difficulty director")
 ```
-density(t)   = 8 + 14·min(t/240,1)^1.25      (veh/km/lane)
-speedBand(t) = base ± (5 + 25·min(t/240,1))
-chgFreq(t)   = 0.02 → 0.12 per agent·s
-eventRate    = 1/40 s → 1/18 s over 240 s
+density(t)   = 6.5 + 2.5·min(t/240,1)^1.25   (veh/km/lane, flat after 4 min)
+eventRate    = 1/40 s → 1/24 s over 240 s    (variety pacing, not pressure)
 ```
-Target: **top-quartile median survival 4–6 min**; novice/intermediate/expert cohort curves from telemetry (M8). Mercy rule: 2 early crashes (< 90 s) → 30 s density pause, unannounced. Event injectors every 20–40 s: ROADBLOCK, CUTTER, DRUNK_WEAVER, CONVOY, TOLL_SQUEEZE, RUBBERNECKING, MIRROR_EVENT.
+NO survival target (retired, ADR-008): the director adds variety — density drift, feature zones, M7 injectors (ROADBLOCK, CUTTER, DRUNK_WEAVER, CONVOY, TOLL_SQUEEZE, RUBBERNECKING, MIRROR_EVENT) — as readable, survivable set-pieces. Mercy rule kept: 2 early crashes (< 90 s) → 30 s density pause, unannounced.
 
 ### 11.3 Persistence
 ```
@@ -363,8 +362,8 @@ Idealized engineering weeks; **calendar expectation solo with AI assistance: 3�
 | **M4 World & environments** (6–7) | Chunk streamer, seeded procgen, 3 themes + lighting rigs, batching, TOD/weather, event framework | ≤ 2 ms chunks; ≤ 250 calls Low; variety panel < 10% flags |
 | **M5 Game systems** (8) | Scoring + combos + popups, damage/wreck, results, atomic persistence, garage + 3 cars | Full loop; scores survive; blind car-personality test 8/10 |
 | **M6 Art & audio** (9–10) | Hero cars, damage states, FX, final grade pass; procedural engine + SFX; presets + auto-scaler | Budgets green on 3 laptops; audio latency < 30 ms; premium panel ≥ 4/5 |
-| **M7 Difficulty & events** (11) | Director curves, all injectors, mercy; telemetry export | Survival histograms; mid-cohort median 2.5–4 min |
-| **M8 Calibration & polish** (12) | 12+ playtesters; tune to top-quartile median 4–6 min; options completeness; accessibility | Survival target met statistically; 0 known fairness bugs |
+| **M7 Variety & events** (11) | Director curves, all injectors, mercy; telemetry export | Injectors readable & survivable; telemetry export works |
+| **M8 Comfort & polish** (12) | 12+ playtesters; tune assists/feel for relaxed fun; options completeness; accessibility | Assist comfort ≥ 4/5; 0 known fairness bugs |
 | **M9 Ship prep** (13) | Perf CI, migrations, packaging/page, trailer, legal pass | Load ≤ 3 s; cold boot → driving ≤ 15 s; budgets green |
 
 Stretch (parked): procedural music, ghost replays, global leaderboards, extra cars/envs.

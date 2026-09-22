@@ -25,7 +25,7 @@ export class GameScene {
   private readonly trafficView = new TrafficRenderer();
   private readonly env: EnvironmentRenderer;
   private readonly ribbon: RoadRibbon;
-  private readonly road: RoadSystem;
+  private road: RoadSystem;
   private readonly proj: Projection = { s: 0, lat: 0 };
 
   constructor(tune: CarTune, road: RoadSystem, theme: ThemeId, seed: number) {
@@ -63,6 +63,11 @@ export class GameScene {
 
   setCarTune(tune: CarTune): void {
     this.carView.setTune(tune);
+  }
+
+  /** Point the scene at a fresh world (retry: new seed, same renderer). */
+  setRoad(road: RoadSystem): void {
+    this.road = road;
   }
 
   cycleCamera(): void {

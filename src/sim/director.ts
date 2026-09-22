@@ -10,14 +10,18 @@ import { type FeaturePolicy, type ThemeId, THEME_POLICIES } from './road';
 const clamp = (v: number, lo: number, hi: number): number =>
   v < lo ? lo : v > hi ? hi : v;
 
-/** PLAN §11.2: density(t) = 8 + 14·min(t/240,1)^1.25 veh/km/lane. */
-export function densityAt(tSec: number, base = 8): number {
-  return base + 14 * Math.pow(Math.min(tSec / 240, 1), 1.25);
+/**
+ * EASY-FIRST density (ADR-008, user directive 2026-09-22): the ramp is a
+ * gentle variety curve, NOT a survival squeeze — base +2.5 veh/km/lane over
+ * 4 minutes, then flat. The 4–6-minute death target is retired.
+ */
+export function densityAt(tSec: number, base = 6.5): number {
+  return base + 2.5 * Math.pow(Math.min(tSec / 240, 1), 1.25);
 }
 
-/** PLAN §11.2: injector period — 40 s early → 18 s late (M7 consumes it). */
+/** Event period — 40 s early → 24 s late (M7 injectors consume it). */
 export function eventPeriodSec(tSec: number): number {
-  return 40 - 22 * Math.min(tSec / 240, 1);
+  return 40 - 16 * Math.min(tSec / 240, 1);
 }
 
 export interface DirectorState {
@@ -65,19 +69,18 @@ export class DifficultyDirector {
   }
 
   /**
-   * Theme policy modulated by difficulty: curvature and construction
-   * intensity rise gently over the first 4 minutes (bounded), oncoming
-   * zones unlock after 45 s so runs open calm. Deterministic in
-   * (theme, runTime) — the road consumes probabilities per chunk.
+   * Theme policy modulated by the relaxed profile: curvature rises a touch
+   * over 4 minutes (variety), oncoming zones unlock after 45 s, construction
+   * stays sparse. Deterministic in (theme, runTime).
    */
   featurePolicy(theme: ThemeId): FeaturePolicy {
     const base = THEME_POLICIES[theme];
     const ramp = Math.min(this.st.runTime / 240, 1);
     const onc =
-      this.st.runTime < 45 ? 0 : clamp(base.oncomingP * (0.7 + 0.6 * ramp), 0, 0.7);
+      this.st.runTime < 45 ? 0 : clamp(base.oncomingP * (0.7 + 0.3 * ramp), 0, 0.5);
     return {
       oncomingP: onc,
-      constructionP: clamp(base.constructionP * (0.8 + 0.5 * ramp), 0.04, 0.18),
+      constructionP: clamp(base.constructionP * (0.8 + 0.3 * ramp), 0.04, 0.12),
       curveBias: clamp(base.curveBias * (0.9 + 0.25 * ramp), 0.8, 1.7),
     };
   }

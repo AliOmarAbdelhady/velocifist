@@ -82,6 +82,15 @@ export interface TrafficAgent {
   nmTracked: boolean;
   nmMinClearance: number;
   nmWasAhead: boolean;
+  // clean-pass tracking (one per encounter; arm() resets)
+  passCounted: boolean;
+  hadContact: boolean;
+}
+
+export interface PassEvent {
+  agentId: number;
+  closingSpeed: number;
+  oncoming: boolean;
 }
 
 export type NearMissTier = 'INCHES' | 'VERY_CLOSE' | 'NEAR';
@@ -118,7 +127,9 @@ export interface TrafficConfig {
 export const DEFAULT_TRAFFIC_CONFIG: TrafficConfig = {
   laneCount: 4,
   laneWidth: 6,
-  densityPerKmPerLane: 9,
+  // EASY (ADR-008): relaxed density — the difficulty director nudges this
+  // live, gently, and never escalates toward a kill pace
+  densityPerKmPerLane: 6.5,
   spawnAheadMin: 320,
   spawnAheadMax: 470,
   despawnBehind: 80,

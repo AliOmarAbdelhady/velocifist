@@ -73,7 +73,8 @@ export interface FeaturePolicy {
 
 export const THEME_POLICIES: Record<ThemeId, FeaturePolicy> = {
   coastal: { oncomingP: 0, constructionP: 0.1, curveBias: 1.0 },
-  neon: { oncomingP: 0.55, constructionP: 0.06, curveBias: 1.05 },
+  // EASY: oncoming ×2 zones rarer — the thrill is opt-in, not ambient
+  neon: { oncomingP: 0.35, constructionP: 0.06, curveBias: 1.05 },
   desert: { oncomingP: 0, constructionP: 0.12, curveBias: 1.3 },
 };
 

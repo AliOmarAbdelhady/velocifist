@@ -2,9 +2,9 @@
 
 > Updated at the end of every work session. ✅ done · 🔶 partial · ⬜ not started.
 
-**Last updated:** 2026-09-22 (M4 session 6 — complete)
-**Current milestone:** M4 — World & Environments ✅ (98/98 tests; browser-verified 60 fps / 18 draws / 0.2 ms chunks)
-**Next step:** user drives the three worlds (`npm run dev` port 5173; T cycles theme, ?theme=neon|desert pins one); then "continue" → M5 (scoring, damage, persistence, garage)
+**Last updated:** 2026-09-22 (M5 session 7 — complete + easy-first rework)
+**Current milestone:** M5 — Game systems ✅ (125/125 tests; full loop verified live end-to-end)
+**Next step:** user plays the full game loop (drive → wreck → results → retry, garage, scoring, saves); then "continue" → M6 (art & audio pass, quality tiers)
 
 ## Milestones
 
@@ -15,6 +15,7 @@
 | M2 ⭐ | Hand-tracking core (worker, MediaPipe, gestures, calibration) | 🔶 code-complete | scripted gates 56/56; live camera half = user |
 | M3 | Traffic AI + swept collision + near-miss detection | ✅ done | soak 0 violations; 73/73 |
 | M4 | World streaming + 3 environments | ✅ done | 98/98; curved+straight soaks clean; gates green |
+| M5 | Scoring/damage/persistence/garage + EASY-first rework (ADR-008) | ✅ done | 125/125; E2E live-verified |
 | M5 | Scoring/damage/persistence/garage | ⬜ | |
 | M6 | Art + audio pass, quality tiers | ⬜ | |
 | M7 | Difficulty director + events + telemetry | ⬜ | |
@@ -70,6 +71,14 @@
 - [x] Flow wiring: camera explainer → wizard → drive; keyboard-only fallback path; HUD input line
 - [x] Tests 56/56 · build green (130.9 kB gzip main + 144 kB worker; assets verified in dist)
 - [ ] **LIVE GATES (user, PLAN §5.9):** wizard mean error, latency readout, crossing feel, false-brake feel, dropout grace — report back for tuning
+
+### Session 7 (2026-09-22, M5 + easy-first) — game systems complete
+- USER DIRECTIVE (ADR-008): game is EASY — lane-keep + stability assists always on, relaxed density (6.5→9 flat), softer wall/grass, rarer oncoming; 4–6-min death target RETIRED (PLAN v1.2).
+- scoring.ts (passive/tiers/oncoming ×2/combo cap 10/clean passes/streaks/FLOW regen) + damage.ts (impulse curve, window merge, states, wreck) + persistence (atomic, injectable storage, unlocks) + traffic clean-pass events.
+- UI: game HUD (speed/score/combo/health/toasts), results overlay (audit breakdown, NEW BEST), garage picker (stats bars, locks, persists choice).
+- main.ts: Game class run lifecycle (retry/garage keys, theme rotation per run, live density from director).
+- 125/125 (27 new: scoring 12, damage 7, persist 7, director/car updated).
+- Live E2E in browser: garage → hands-off 317 km/h (assist proof) → forced wreck → results 17,387 pts → localStorage written → retry → fresh run on Neon.
 
 ### Session 6 (2026-09-22, M4) — world & environments complete
 - RoadSystem (curved spine, ADR-007), DifficultyDirector skeleton, car RoadGuide, traffic s/lat/dir refactor with oncoming lanes + relative collision sweep.

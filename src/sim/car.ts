@@ -104,6 +104,11 @@ export class Car {
   /** Curved-world guide (M4): when set, off-road + soft wall use the lateral
    *  offset from the road spine instead of |x|. Null = straight road (tests). */
   guide: RoadGuide | null = null;
+  /** EASY MODE (user directive, ADR-008): lane-keep + stability assists are
+   *  always on in the game. Tests opt out for raw-dynamics gates. */
+  laneAssist = true;
+  /** engine power multiplier (damage CRITICAL state sets 0.92) */
+  powerScale = 1;
   readonly tune: CarTune;
 
   constructor(tune: CarTune) {
@@ -125,7 +130,8 @@ export class Car {
       latAbs = Math.abs(this.x);
     }
     const offRoad = latAbs > t.roadHalfWidth;
-    const gripScale = offRoad ? 0.55 : 1;
+    // EASY: grass punishes less — recoverable, not a run-ender
+    const gripScale = offRoad ? 0.7 : 1;
     // downforce: supercars literally stick more the faster they go
     const speedFrac = Math.min(1, Math.abs(this.u) / t.vMax);
     const aero = 1 + t.downforce * speedFrac * speedFrac;
@@ -133,11 +139,23 @@ export class Car {
     // ---- steering: speed-sensitive range, slew-limited, slide assist ----
     const dMax = t.deltaMax / (1 + Math.abs(this.u) / t.steerFadeSpeed);
     let target = clamp(intent.steer, -1, 1) * dMax;
-    if (this.rearSlip > 0.78 && Math.abs(this.beta) > 0.1) {
-      // counter-steer assist (PLAN §6.2 "subtle"): only when the rear axle is
-      // genuinely saturated AND the body is sliding — never during normal
-      // cornering (β is naturally nonzero there). Uses last step's saturation.
-      target = clamp(target + 0.45 * this.beta * dMax, -dMax, dMax);
+    if (this.rearSlip > 0.62 && Math.abs(this.beta) > 0.08) {
+      // counter-steer assist (EASY: earlier + stronger than the M1 tune) —
+      // only when the rear axle is genuinely saturated AND the body slides;
+      // never during normal cornering (β is naturally nonzero there).
+      target = clamp(target + 0.55 * this.beta * dMax, -dMax, dMax);
+    }
+    if (this.laneAssist && this.guide) {
+      // EASY: lane-keep assist — steer toward the road heading ahead plus a
+      // gentle centre-line pull. Full strength with quiet hands (|steer| <
+      // 0.4), faded to 35% when the player is deliberately steering.
+      this.guide.sample(CAR_PROJ.s + 12 + 0.22 * Math.abs(this.u), CAR_SPINE);
+      let dh = CAR_SPINE.heading - this.heading;
+      while (dh > Math.PI) dh -= 2 * Math.PI;
+      while (dh < -Math.PI) dh += 2 * Math.PI;
+      dh += clamp(-latSigned * 0.035, -0.12, 0.12); // drift back to centre
+      const k = 0.55 * (Math.abs(intent.steer) < 0.4 ? 1 : 0.35);
+      target = clamp(target + clamp(k * dh, -0.3, 0.3), -dMax * 1.15, dMax * 1.15);
     }
     const rate = t.steerRate * dt;
     this.steer += clamp(target - this.steer, -rate, rate);
@@ -155,12 +173,13 @@ export class Car {
     const sgnU = this.u >= 0 ? 1 : -1;
     const roll =
       (Math.abs(this.u) > 0.3 ? 1 : 0) * sgnU * t.rollForce +
-      (offRoad ? sgnU * (900 + 30 * Math.abs(this.u)) : 0);
+      (offRoad ? sgnU * (500 + 18 * Math.abs(this.u)) : 0);
     const limiter = 1 - smoothstep(t.vMax * 0.93, t.vMax, Math.abs(this.u));
     const drive =
       Math.min(t.launchForce, t.powerW / Math.max(Math.abs(this.u), 4)) *
       intent.throttle *
-      limiter;
+      limiter *
+      this.powerScale;
     // brake force is a decelerating (negative) contribution, split per axle
     const brakeFwd = -t.brakeForce * intent.brake;
     const muF = t.muFront * gripScale * aero;
@@ -200,12 +219,11 @@ export class Car {
     // no reverse this milestone: braking stops at zero (reverse gear is out of scope)
     if (this.u < 0) this.u = 0;
     this.w += aw * dt;
-    // gentle scrub/yaw damping — stability feel at 60 Hz without faking grip;
-    // yaw damping scales with rear saturation (ESC-lite: kills spins fast,
-    // leaves normal cornering untouched)
-    this.w *= Math.max(0, 1 - 0.35 * dt);
+    // EASY: stronger scrub/yaw damping — the car actively refuses to spin
+    // (ESC-plus: kills slides fast, leaves normal cornering untouched)
+    this.w *= Math.max(0, 1 - 0.5 * dt);
     this.omega += ((t.a * FyF * cosD - t.b * FyR) / t.iz) * dt;
-    this.omega *= Math.max(0, 1 - (0.25 + 1.8 * this.rearSlip) * dt);
+    this.omega *= Math.max(0, 1 - (0.55 + 1.8 * this.rearSlip) * dt);
     this.heading += this.omega * dt;
 
     // world integration (forward = (sin h, −cos h), right = (cos h, sin h))
@@ -239,9 +257,9 @@ export class Car {
       } else {
         this.x = Math.sign(this.x) * wall;
       }
-      this.w *= -0.25;
-      this.u *= 0.965;
-      this.omega *= 0.6;
+      this.w *= -0.15; // EASY: guardrail grazes scrub speed gently
+      this.u *= 0.985;
+      this.omega *= 0.5;
     }
 
     // derived state
