@@ -13,7 +13,7 @@ import type { NearMissEvent, PassEvent, NearMissTier } from './trafficTypes';
 export interface ScoringConfig {
   /** passive points per second at vMax above the speed floor, PLAN: 60 */
   passiveRate: number;
-  /** speed floor for passive score, m/s (PLAN: 80 km/h) */
+  /** speed floor for passive score, m/s (ADR-012: 35 km/h — cruising always scores) */
   speedFloor: number;
   nearMissPoints: Record<NearMissTier, number>;
   oncomingMultiplier: number;
@@ -32,7 +32,7 @@ export interface ScoringConfig {
 
 export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
   passiveRate: 60,
-  speedFloor: 80 / 3.6,
+  speedFloor: 35 / 3.6,
   nearMissPoints: { INCHES: 500, VERY_CLOSE: 250, NEAR: 100 },
   oncomingMultiplier: 2,
   comboWindowSec: 4,
@@ -40,7 +40,7 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
   comboCap: 10,
   cleanPassBase: 50,
   cleanPassFastBonus: 100,
-  fastThreshold: 120 / 3.6,
+  fastThreshold: 6, // m/s closing — fast-pass bonus in the 80 km/h regime
   cleanStreakSec: 30,
   cleanStreakBonus: 1000,
   flowComboThreshold: 5,
@@ -100,7 +100,7 @@ export class ScoringSystem {
     const v = Math.abs(car.u);
     if (v > this.topSpeed) this.topSpeed = v;
     if (v > this.cfg.speedFloor) {
-      const frac = Math.min(1, v / car.tune.vMax);
+      const frac = Math.min(1, v / car.tune.vCruise);
       const pts =
         this.cfg.passiveRate * frac * frac * dt * (this.flow ? 1.5 : 1);
       this.score += pts;

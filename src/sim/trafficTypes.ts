@@ -32,13 +32,13 @@ export interface FamilyDef {
 
 /** Seven families with distinct sizes, speeds and habits (PLAN §8). */
 export const FAMILIES: readonly FamilyDef[] = [
-  { id: 'compact', halfW: 0.85, halfL: 1.9, vMin: 25, vMax: 31, aMax: 1.8, bComfort: 2.2, headwayT: 1.4, s0: 2.2, laneChangeEagerness: 0.5, massRatio: 0.7 },
-  { id: 'sedan', halfW: 0.92, halfL: 2.3, vMin: 24, vMax: 30, aMax: 1.6, bComfort: 2.2, headwayT: 1.5, s0: 2.4, laneChangeEagerness: 0.45, massRatio: 1.0 },
-  { id: 'sports', halfW: 0.95, halfL: 2.2, vMin: 28, vMax: 36, aMax: 2.4, bComfort: 2.6, headwayT: 1.2, s0: 2.2, laneChangeEagerness: 0.6, massRatio: 0.9 },
-  { id: 'suv', halfW: 1.02, halfL: 2.5, vMin: 24, vMax: 29, aMax: 1.4, bComfort: 2.0, headwayT: 1.6, s0: 2.6, laneChangeEagerness: 0.35, massRatio: 1.3 },
-  { id: 'van', halfW: 1.05, halfL: 2.7, vMin: 22, vMax: 27, aMax: 1.2, bComfort: 1.9, headwayT: 1.7, s0: 2.8, laneChangeEagerness: 0.25, massRatio: 1.4 },
-  { id: 'bus', halfW: 1.3, halfL: 6.0, vMin: 20, vMax: 25, aMax: 0.9, bComfort: 1.6, headwayT: 2.0, s0: 3.2, laneChangeEagerness: 0.08, massRatio: 2.6 },
-  { id: 'truck', halfW: 1.25, halfL: 5.4, vMin: 19, vMax: 23, aMax: 0.8, bComfort: 1.5, headwayT: 2.2, s0: 3.4, laneChangeEagerness: 0.06, massRatio: 3.0 },
+  { id: 'compact', halfW: 0.85, halfL: 1.9, vMin: 12.0, vMax: 15.0, aMax: 1.8, bComfort: 2.2, headwayT: 1.4, s0: 2.2, laneChangeEagerness: 0.5, massRatio: 0.7 },
+  { id: 'sedan', halfW: 0.92, halfL: 2.3, vMin: 11.5, vMax: 14.5, aMax: 1.6, bComfort: 2.2, headwayT: 1.5, s0: 2.4, laneChangeEagerness: 0.45, massRatio: 1.0 },
+  { id: 'sports', halfW: 0.95, halfL: 2.2, vMin: 13.5, vMax: 16.5, aMax: 2.4, bComfort: 2.6, headwayT: 1.2, s0: 2.2, laneChangeEagerness: 0.6, massRatio: 0.9 },
+  { id: 'suv', halfW: 1.02, halfL: 2.5, vMin: 11.0, vMax: 13.5, aMax: 1.4, bComfort: 2.0, headwayT: 1.6, s0: 2.6, laneChangeEagerness: 0.35, massRatio: 1.3 },
+  { id: 'van', halfW: 1.05, halfL: 2.7, vMin: 10.5, vMax: 12.5, aMax: 1.2, bComfort: 1.9, headwayT: 1.7, s0: 2.8, laneChangeEagerness: 0.25, massRatio: 1.4 },
+  { id: 'bus', halfW: 1.3, halfL: 6.0, vMin: 9.0, vMax: 11.0, aMax: 0.9, bComfort: 1.6, headwayT: 2.0, s0: 3.2, laneChangeEagerness: 0.08, massRatio: 2.6 },
+  { id: 'truck', halfW: 1.25, halfL: 5.4, vMin: 8.5, vMax: 10.5, aMax: 0.8, bComfort: 1.5, headwayT: 2.2, s0: 3.4, laneChangeEagerness: 0.06, massRatio: 3.0 },
 ];
 
 /** Pool slot: `active` agents are simulated + rendered.
@@ -133,11 +133,11 @@ export interface TrafficConfig {
 export const DEFAULT_TRAFFIC_CONFIG: TrafficConfig = {
   laneCount: 4,
   laneWidth: 6,
-  // EASY (ADR-008): relaxed density — the difficulty director nudges this
-  // live, gently, and never escalates toward a kill pace
-  densityPerKmPerLane: 6.5,
-  spawnAheadMin: 320,
-  spawnAheadMax: 470,
+  // EASY (ADR-008/012): relaxed-but-full density — traffic is present from
+  // the first frame (warmup) and the director only nudges this, gently
+  densityPerKmPerLane: 8,
+  spawnAheadMin: 110,
+  spawnAheadMax: 300,
   despawnBehind: 80,
   maxAgents: 48,
   seed: 12345,

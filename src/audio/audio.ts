@@ -58,7 +58,7 @@ export interface WhooshParams {
 
 /** Near-miss doppler sweep from closing speed (m/s). */
 export function whooshParams(closing: number): WhooshParams {
-  const x = Math.min(1, Math.max(0, (closing - 6) / 60));
+  const x = Math.min(1, Math.max(0, (closing - 2) / 9)); // ADR-012 cruise closing band
   return {
     dur: 0.2 + 0.16 * x,
     f0: 2400 + 900 * x,
@@ -415,7 +415,7 @@ export class GameAudio {
     }
 
     const v = Math.abs(car.u);
-    const vf = Math.min(1, v / car.tune.vMax);
+    const vf = Math.min(1, v / car.tune.vCruise);
     this.windGain.gain.setTargetAtTime(vf * vf * 0.4, t, 0.1);
     this.windLP.frequency.setTargetAtTime(280 + v * 9, t, 0.1);
 

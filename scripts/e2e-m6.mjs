@@ -58,7 +58,8 @@ await page.screenshot({ path: `${OUT}/01-drive-coastal.png` });
 s = await read();
 console.log('AFTER 5s W: speed=' + s.speed + ' health=' + s.health);
 const kmh = parseFloat(s.speed) || 0;
-if (kmh < 60) throw new Error('car not accelerating: ' + s.speed);
+if (kmh < 25) throw new Error('car not accelerating: ' + s.speed);
+if (kmh > 81) throw new Error('cruise cap exceeded: ' + s.speed);
 
 // speed lines visible at speed? (fx streaks are in-scene; screenshot proof)
 await page.waitForTimeout(3000);

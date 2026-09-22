@@ -11,12 +11,12 @@ const clamp = (v: number, lo: number, hi: number): number =>
   v < lo ? lo : v > hi ? hi : v;
 
 /**
- * EASY-FIRST density (ADR-008, user directive 2026-09-22): the ramp is a
- * gentle variety curve, NOT a survival squeeze — base +2.5 veh/km/lane over
- * 4 minutes, then flat. The 4–6-minute death target is retired.
+ * EASY-FIRST density (ADR-008, ADR-012): the ramp is a gentle variety curve,
+ * NOT a survival squeeze — base 8 veh/km/lane (the cruise regime runs slower,
+ * so the road runs fuller) +2 over 4 minutes, then flat. No death pacing.
  */
-export function densityAt(tSec: number, base = 6.5): number {
-  return base + 2.5 * Math.pow(Math.min(tSec / 240, 1), 1.25);
+export function densityAt(tSec: number, base = 8): number {
+  return base + 2 * Math.pow(Math.min(tSec / 240, 1), 1.25);
 }
 
 /** Event period — 40 s early → 24 s late (M7 injectors consume it). */

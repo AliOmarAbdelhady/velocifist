@@ -158,3 +158,11 @@
 - **README replaced** (the M0 one still advertised the retired five-minute death rule): pitch, controls table incl. one-handed, quickstart, E2E script map, dev backdoors, architecture map, deployment + PWA notes, credits (MIT code; Three.js MIT; MediaPipe Apache-2.0; zero third-party art/audio per ADR-009).
 - **Verification:** 210/210 tests; build green; E2E `scripts/e2e-m10.mjs` green (budgets, manifest, SW activated+controlling, primed cache, wasm+model cached, offline reload boots, Pages-base build serves + drives under /velocifist/, 0 console errors).
 - Docs: PLAN v1.7, PILLs 091–093; version 1.0.0.
+
+### Session 13 (2026-09-23, M11) — cruise traffic (user post-1.0 feedback)
+- **Constant-gas cruise (ADR-012):** cars cap at 80/80/75 km/h via `vCruise` soft limiter; gears/downforce/audio/FOV normalize over the cap; held gas = dead-steady plateau in 7th (E2E: 79 km/h flat for 10+ s, never past 80).
+- **Traffic from second zero:** corridor warmup through the normal fairness rules; 12 cars active within the first second (E2E); spawn window 110–300 m; base density 8.
+- **Regime rescale:** traffic families 30–60 km/h, event speeds ~½ with nearer placement, near-miss floor 11.1→3 m/s, passive-score floor 35 km/h, speed lines from ~43 km/h.
+- **Fairness fixes the regime exposed:** direction-aware beside-blocking + matchable-neighbour rule in `hasEscape`; soak bot keeps a following envelope.
+- **Verification:** 210/210 tests (validation targets re-measured for the regime: 0→75 km/h, cruise→0 braking, near-cruise slalom); E2E m6/m7/m8/m9 all green under the new speeds + new `e2e-m11.mjs` (traffic at t≈1 s, plateau, coast decay), 0 console errors; build green.
+- Docs: ADR-012, PILLs 095–097, PLAN v1.8.

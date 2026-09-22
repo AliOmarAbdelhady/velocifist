@@ -72,12 +72,12 @@ describe('near-miss scoring', () => {
 });
 
 describe('passive + clean passes + streaks', () => {
-  it('passive score only above 80 km/h, ×1.5 in FLOW', () => {
+  it('passive score only above the 35 km/h floor, ×1.5 in FLOW (ADR-012)', () => {
     const s = new ScoringSystem();
-    const slow = carAt(15);
+    const slow = carAt(8); // walking pace parked-ish: below the floor
     s.update(10, slow);
     expect(s.score).toBe(0); // below the floor
-    const fast = carAt(CAR_TUNES[0].vMax);
+    const fast = carAt(CAR_TUNES[0].vCruise); // cruise cap = full passive rate
     s.update(1, fast);
     expect(s.score).toBeGreaterThan(55);
     expect(s.score).toBeLessThan(62);
@@ -87,11 +87,11 @@ describe('passive + clean passes + streaks', () => {
     expect(s.score).toBeGreaterThan(55 + 60 * 1.5 * 0.5 + 75); // FLOW active part-step
   });
 
-  it('clean pass: +50, +100 more above 120 km/h closing', () => {
+  it('clean pass: +50, +100 more above the 6 m/s fast-closing bar', () => {
     const s = new ScoringSystem();
-    s.onPasses([pass(20)]);
+    s.onPasses([pass(3)]);
     expect(s.score).toBe(50);
-    s.onPasses([pass(40)]);
+    s.onPasses([pass(9)]);
     expect(s.score).toBe(50 + 150);
     expect(s.counts.cleanPassFast).toBe(1);
   });

@@ -230,10 +230,10 @@ export class GameScene {
     this.rig.update(
       frameDt,
       { x: pose.x, z: pose.z, heading: pose.heading, u: car.u, steer: car.steer, ayLast: car.ayLast },
-      car.tune.vMax,
+      car.tune.vCruise,
     );
 
-    this.grade.render(this.scene, this.camera, frameDt, Math.min(1, v / car.tune.vMax));
+    this.grade.render(this.scene, this.camera, frameDt, Math.min(1, v / car.tune.vCruise));
     return coneHits;
   }
 

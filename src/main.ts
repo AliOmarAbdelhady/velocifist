@@ -214,6 +214,9 @@ class Game {
       { seed: runSeed, laneCount: this.road.laneCount, laneWidth: this.road.laneWidth },
       this.road,
     );
+    // ADR-012: the road is ALIVE from frame one — corridor pre-populated
+    // around the player, no empty-start seconds at cruise speeds
+    this.traffic.warmup(tune.bodyDims[0] / 2, tune.bodyDims[2] / 2);
     // dev/E2E backdoor (?smash=1): a slow truck in the player's lane 80 m
     // ahead — guarantees a heavy contact to exercise the M6 crash chain
     // (sparks, smoke, crash audio, wreck, results) deterministically.

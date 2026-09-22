@@ -47,8 +47,11 @@ export interface CarTune {
   launchForce: number;
   /** drive force fraction on the front axle (0 = RWD) */
   driveSplitFront: number;
-  /** top speed, m/s (soft limiter) */
+  /** top speed, m/s — physics headroom only (drag balance, test bounds) */
   vMax: number;
+  /** ADR-012 cruise cap, m/s — the soft limiter and gear spread anchor;
+   *  full gas plateaus here (80 km/h class, old-arcade constant cruise) */
+  vCruise: number;
   /** quadratic drag coefficient, N/(m/s)² */
   dragK: number;
   /** rolling resistance, N */
@@ -59,8 +62,9 @@ export interface CarTune {
   /** drivable half width before grass, m */
   roadHalfWidth: number;
   healthMax: number;
-  /** validation targets (M1 gate, PLAN §6.3) */
-  target0100: number;
+  /** validation targets (PLAN §6.3, ADR-012 cruise regime):
+   *  targetCruise = 0→75 km/h seconds, targetBrake = 75→0 metres */
+  targetCruise: number;
   targetBrake: number;
   /** visuals */
   bodyDims: [number, number, number];
@@ -142,7 +146,8 @@ export class Car {
     // EASY: grass punishes less — recoverable, not a run-ender
     const gripScale = offRoad ? 0.7 : 1;
     // downforce: supercars literally stick more the faster they go
-    const speedFrac = Math.min(1, Math.abs(this.u) / t.vMax);
+    // (normalized over the CRUISE cap, ADR-012 — full stick at 80 km/h)
+    const speedFrac = Math.min(1, Math.abs(this.u) / t.vCruise);
     const aero = 1 + t.downforce * speedFrac * speedFrac;
 
     // ---- steering: speed-sensitive range, slew-limited, slide assist ----
@@ -183,7 +188,10 @@ export class Car {
     const roll =
       (Math.abs(this.u) > 0.3 ? 1 : 0) * sgnU * t.rollForce +
       (offRoad ? sgnU * (500 + 18 * Math.abs(this.u)) : 0);
-    const limiter = 1 - smoothstep(t.vMax * 0.93, t.vMax, Math.abs(this.u));
+    // ADR-012 cruise regime: the limiter holds the car at vCruise (80 km/h
+    // class) — full gas is a constant cruise like the old arcade racers,
+    // never an ever-climbing speed. vMax stays as physics headroom only.
+    const limiter = 1 - smoothstep(t.vCruise * 0.93, t.vCruise, Math.abs(this.u));
     const drive =
       Math.min(t.launchForce, t.powerW / Math.max(Math.abs(this.u), 4)) *
       intent.throttle *
@@ -276,8 +284,9 @@ export class Car {
     this.ayLast = aw + this.u * this.omega;
     this.beta = this.u > 2 ? Math.atan2(this.w, Math.abs(this.u)) : 0;
 
-    // drivetrain (HUD/audio): 7 gears spread across vMax
-    const vf = clamp(Math.abs(this.u) / t.vMax, 0, 0.9999);
+    // drivetrain (HUD/audio): 7 gears spread across the CRUISE cap — 80 km/h
+    // is top of 7th, so held gas sings at high rpm instead of idling mid-box
+    const vf = clamp(Math.abs(this.u) / t.vCruise, 0, 0.9999);
     let g = 1;
     while (g < 7 && vf >= GEAR_FRACTIONS[g]) g++;
     this.gear = g;

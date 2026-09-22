@@ -156,10 +156,12 @@ export class TrafficSystem {
         if (alx !== lx) continue;
         const ds = a.s - ps; // >0: agent ahead of the player
         if (Math.abs(ds) < FAMILIES[a.family].halfL + pHalfL + 1.0) {
-          // beside/overlapping the entry — unless the occupant is pulling
-          // away faster than we're closing (they vacate the lane for us)
-          const closingBeside = pu - a.dir * a.speed;
-          if (closingBeside > -1) {
+          // beside/overlapping the entry. ADR-012: a neighbour barely slower
+          // than us (≤1.5 m/s) is MATCHABLE within a second — not a wall —
+          // and an agent BEHIND that we outrun can never block the entry.
+          // Only a genuinely closing occupant (either direction) blocks.
+          const relClose = pu - a.dir * a.speed; // + = we pull ahead of them
+          if (ds < 0 ? -relClose > 1.5 : relClose > 1.5) {
             blocked = true;
             break;
           }
@@ -218,7 +220,28 @@ export class TrafficSystem {
 
   // ------------------------------------------------------------------ spawn
 
-  private spawn(dt: number, pHalfW: number, pHalfL: number): void {
+  /**
+   * ADR-012: fill the corridor around the player at run start — the road is
+   * alive from the first frame instead of populating only as the (now slow)
+   * spawner window drifts in. Uses the normal spawn rules (zones, lane gaps,
+   * fairness rollback) with a nearer minimum so cars are immediately visible.
+   */
+  warmup(pHalfW: number, pHalfL: number): void {
+    const windowM = this.cfg.spawnAheadMax + this.cfg.despawnBehind;
+    const target = Math.min(
+      this.cfg.maxAgents,
+      Math.round(this.cfg.densityPerKmPerLane * this.cfg.laneCount * (windowM / 1000)),
+    );
+    for (let i = 0; i < 400; i++) {
+      let active = 0;
+      for (const a of this.agents) if (a.active) active++;
+      if (active >= target) return;
+      this.spawnTimer = 0;
+      this.spawn(0, pHalfW, pHalfL, 40);
+    }
+  }
+
+  private spawn(dt: number, pHalfW: number, pHalfL: number, aheadMin = 0): void {
     const windowM = this.cfg.spawnAheadMax + this.cfg.despawnBehind;
     const target = Math.min(
       this.cfg.maxAgents,
@@ -235,7 +258,8 @@ export class TrafficSystem {
     const slot = this.agents.find((a) => !a.active);
     if (!slot) return;
 
-    const s = this.playerS + (this.cfg.spawnAheadMin + this.rng() * (this.cfg.spawnAheadMax - this.cfg.spawnAheadMin));
+    const near = aheadMin || this.cfg.spawnAheadMin;
+    const s = this.playerS + (near + this.rng() * (this.cfg.spawnAheadMax - near));
     const onc = this.road.oncomingAt(s);
 
     // pick a direction + lane valid for the zone layout at s

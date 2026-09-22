@@ -56,7 +56,13 @@ function driveIntoGaps(car: Car, traffic: TrafficSystem, road: RoadSystem): Driv
     if (!a.active || a.state === 'KNOCKED' || a.dir < 0) continue;
     if (Math.abs(a.lat - plat) > 3) continue;
     const ds = a.s - traffic.playerS;
-    if (ds > 0 && ds / Math.max(1, car.u - a.speed) < 1.9) {
+    if (ds <= 0) continue;
+    // ADR-012: slow traffic shrinks the match-speed envelope — an attentive
+    // driver never tailgates inside it (the fairness invariant's premise is
+    // a player who keeps an escape, so the bot keeps one too)
+    const closing = Math.max(0.5, car.u - a.speed);
+    const gap = ds - 5; // ~ halfL + halfL
+    if (ds / closing < 1.9 || gap < (closing * closing) / 16 + 4) {
       throttle = 0;
       brake = 0.8;
     }
@@ -78,11 +84,11 @@ describe('IDM car following', () => {
     try {
       t.agents[0] = Object.assign(t.agents[0], {
         active: true, id: 1, family: 1, lane: 0, s: 60, lat: t.laneCenter(0), dir: 1,
-        speed: 22, desiredSpeed: 22, state: 'CRUISE',
+        speed: 14, desiredSpeed: 14, state: 'CRUISE', // ADR-012 regime
       });
       t.agents[1] = Object.assign(t.agents[1], {
         active: true, id: 2, family: 6, lane: 0, s: 30, lat: t.laneCenter(0), dir: 1,
-        speed: 27, desiredSpeed: 27, state: 'CRUISE',
+        speed: 16, desiredSpeed: 16, state: 'CRUISE',
       });
       const lenSum = FAMILIES[6].halfL + FAMILIES[1].halfL;
       let minGap = Infinity;
@@ -97,7 +103,8 @@ describe('IDM car following', () => {
       const settleGap = t.agents[0].s - t.agents[1].s - lenSum;
       // truck equilibrium gap: s0 + v·T (+ slack) — long headway by design
       expect(settleGap).toBeGreaterThan(FAMILIES[6].s0 - 0.5);
-      expect(settleGap).toBeLessThan(FAMILIES[6].s0 + 22 * FAMILIES[6].headwayT + 12);
+      // equilibrium ≈ sStar/√(1−(v/vd)⁴): the truck still desires 16 → 3.4 + 14·2.2 / 0.64 ≈ 53
+      expect(settleGap).toBeLessThan(FAMILIES[6].s0 + 14 * FAMILIES[6].headwayT + 22);
       expect(Math.abs(t.agents[1].speed - t.agents[0].speed)).toBeLessThan(1.5);
     } finally {
       for (const [f, e] of saved) FAMILIES[f].laneChangeEagerness = e;
@@ -196,7 +203,7 @@ describe('oncoming zones (neon)', () => {
     const car = new Car(CAR_TUNES[0]);
     car.guide = road;
     car.u = 30;
-    for (let i = 0; i < 60 * 20; i++) {
+    for (let i = 0; i < 60 * 50; i++) { // cruise cap: reach the s≥1024 zones
       const px = car.x;
       const pz = car.z;
       car.step(DT, driveIntoGaps(car, t, road));

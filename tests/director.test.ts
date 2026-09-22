@@ -5,10 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { DifficultyDirector, densityAt, eventPeriodSec } from '../src/sim/director';
 
 describe('relaxed formulas (ADR-008 easy-first)', () => {
-  it('density ramps gently 6.5 → 9 veh/km/lane over 4 minutes, then flat', () => {
-    expect(densityAt(0)).toBeCloseTo(6.5, 6);
-    expect(densityAt(240)).toBeCloseTo(9, 6);
-    expect(densityAt(600)).toBeCloseTo(9, 6); // clamped — no death pacing
+  it('density ramps gently 8 → 10 veh/km/lane over 4 minutes, then flat', () => {
+    expect(densityAt(0)).toBeCloseTo(8, 6);
+    expect(densityAt(240)).toBeCloseTo(10, 6);
+    expect(densityAt(600)).toBeCloseTo(10, 6); // clamped — no death pacing
     expect(densityAt(120)).toBeGreaterThan(densityAt(60));
   });
 

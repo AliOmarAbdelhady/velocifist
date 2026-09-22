@@ -26,7 +26,7 @@ const UNLOCK_AT: Record<string, number> = {
 /** Stats bars, 0..1 (M5 visual rubric — speed / accel / grip / toughness). */
 function statBars(t: CarTune): Array<[string, number]> {
   return [
-    ['speed', Math.min(1, t.vMax / 100)],
+    ['speed', Math.min(1, t.vCruise / 25)],
     ['accel', Math.min(1, t.launchForce / 16000)],
     ['grip', Math.min(1, (t.muFront + t.muRear) / 2 / 1.5 + t.downforce * 0.3)],
     ['tough', Math.min(1, t.healthMax / 140)],
@@ -125,7 +125,7 @@ export class Garage {
       }
       const stats = document.createElement('div');
       stats.className = 'cls';
-      stats.textContent = `${Math.round(t.vMax * 3.6)} km/h · ${t.target0100.toFixed(1)} s · ${t.healthMax} hp`;
+      stats.textContent = `${Math.round(t.vCruise * 3.6)} km/h · 0-75 ${t.targetCruise.toFixed(1)} s · ${t.healthMax} hp`;
       card.append(stats);
       if (isLocked) {
         const lock = document.createElement('div');

@@ -42,19 +42,22 @@ function wideRoad(tune: CarTune): CarTune {
 }
 
 describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_name, tune) => {
-  it('reaches 100 km/h within ±12% of its target', () => {
+  it('reaches 75 km/h within ±12% of its target (cruise regime)', () => {
     const c = new Car(tune);
-    let t100 = -1;
+    // 75 km/h for the 80 km/h cars; car-relative so the 75 km/h Bruto works
+    const gate = Math.min(75 / 3.6, tune.vCruise * 0.965);
+    let t75 = -1;
     run(c, () => THR, 15, (cc, t) => {
-      if (t100 < 0 && cc.u * 3.6 >= 100) t100 = t;
+      if (t75 < 0 && cc.u >= gate) t75 = t;
     });
-    expect(t100).toBeGreaterThan(0);
-    expect(Math.abs(t100 - tune.target0100)).toBeLessThanOrEqual(tune.target0100 * 0.12);
+    expect(t75).toBeGreaterThan(0);
+    expect(Math.abs(t75 - tune.targetCruise)).toBeLessThanOrEqual(tune.targetCruise * 0.12);
   });
 
-  it('brakes 100→0 within ±15% of its target distance', () => {
+  it('brakes from cruise to 0 within ±15% of its target distance', () => {
     const c = new Car(tune);
-    expect(accelTo(c, 29)).toBe(true);
+    expect(accelTo(c, tune.vCruise - 0.3)).toBe(true);
+    const from = tune.vCruise - 1;
     let zStart = 0;
     let started = false;
     let stopped = -1;
@@ -63,7 +66,7 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
       () => BRAKE,
       15,
       (cc, t) => {
-        if (!started && cc.u <= 27.78) {
+        if (!started && cc.u <= from) {
           started = true;
           zStart = cc.z;
         }
@@ -78,7 +81,7 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
 
   it('holds a steady corner above 1.0 g lateral (wide pad, coasting)', () => {
     const c = new Car(wideRoad(tune));
-    expect(accelTo(c, 28)).toBe(true);
+    expect(accelTo(c, tune.vCruise - 0.7)).toBe(true);
     run(c, () => IDLE, 0.5);
     let maxG = 0;
     run(c, () => ({ steer: 0.5, throttle: 0, brake: 0 }), 1.5, (cc) => {
@@ -90,7 +93,7 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
 
   it('step-steer yaw response settles without twitch (wide pad, overshoot < 1.4)', () => {
     const c = new Car(wideRoad(tune));
-    expect(accelTo(c, 27.8)).toBe(true);
+    expect(accelTo(c, tune.vCruise - 1.2)).toBe(true);
     run(c, () => IDLE, 1); // settle
     let peak = 0;
     const tail: number[] = [];
@@ -108,15 +111,16 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
     expect(peak / steady).toBeLessThan(1.4);
   });
 
-  it('slaloms at ~120 km/h staying on the road and stable', () => {
+  it('slaloms near cruise speed staying on the road and stable', () => {
     const c = new Car(tune);
-    expect(accelTo(c, 33.3)).toBe(true);
+    expect(accelTo(c, tune.vCruise - 3)).toBe(true);
     // Closed-loop driver (a sine steer alone random-walks off any road).
     // Cascade, like a real lane-keep: aim at a moving preview point → desired
     // heading; heading loop with yaw damping; bounded ±0.4 authority so the
-    // driver itself can never spin the car. Weave target ±1.5 m @ 0.5 Hz ≈ 1.2 g.
+    // driver itself can never spin the car. Weave ±1.5 m @ 0.4 Hz ≈ 0.97 g —
+    // trackable inside the cruise regime's grip envelope.
     const A = 1.5;
-    const F = 0.5;
+    const F = 0.4;
     let maxBeta = 0;
     let minU = Infinity;
     run(
@@ -128,9 +132,8 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
         psiDes = Math.max(-0.25, Math.min(0.25, psiDes));
         let steer = 2.0 * (psiDes - c.heading) - 0.5 * c.omega;
         steer = Math.max(-0.4, Math.min(0.4, steer));
-        const throttle = Math.max(0, Math.min(1, (36 - c.u) * 0.2));
-        const brake = c.u > 38.5 ? 0.25 : 0;
-        return { steer, throttle, brake };
+        // full gas everywhere — the cruise limiter holds the speed (ADR-012)
+        return { steer, throttle: 1, brake: 0 };
       },
       8,
       (cc) => {
@@ -144,11 +147,12 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
     expect(minU).toBeGreaterThan(12);
   });
 
-  it('asymptotes to its top speed and never exceeds it', () => {
+  it('plateaus at the cruise cap under full gas and never exceeds it', () => {
     const c = new Car(tune);
     run(c, () => THR, 250);
-    expect(c.u).toBeLessThanOrEqual(tune.vMax + 0.05);
-    expect(c.u).toBeGreaterThanOrEqual(tune.vMax * 0.93);
+    expect(c.u).toBeLessThanOrEqual(tune.vCruise + 0.05);
+    expect(c.u).toBeGreaterThanOrEqual(tune.vCruise * 0.93);
+    expect(c.u).toBeLessThan(tune.vMax); // headroom exists but is never used
   });
 
   it('is bit-deterministic over 60 s of scripted input (wide pad)', () => {
@@ -212,7 +216,7 @@ describe('road guide (M4 curved world)', () => {
       const targetHeading = sp.heading - 0.05 * pr.lat;
       let steer = 2.4 * (targetHeading - car.heading) - 0.7 * car.omega;
       steer = Math.max(-0.5, Math.min(0.5, steer));
-      car.step(DT, { steer, throttle: car.u < 36 ? 0.55 : 0, brake: car.u > 40 ? 0.3 : 0 });
+      car.step(DT, { steer, throttle: 0.6, brake: 0 });
       road.project(car.x, car.z, pr);
       maxLat = Math.max(maxLat, Math.abs(pr.lat));
       minU = Math.min(minU, car.u);

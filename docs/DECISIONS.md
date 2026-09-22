@@ -117,3 +117,16 @@ M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determi
 4. **Options pauses the run** (sim step skipped, render alive) — changing feel settings mid-run must not crash the car; recalibrate replays the wizard from the same parked state.
 
 **Consequences.** Settings are additive on persistence schema 2 (old saves migrate by default-merge — tested). The options panel is the single mutation surface; main.ts fans changes out to audio/tracker/pip/quality/comfort via one callback. E2E proves pause-freeze, persistence, live application and reset; unit tests pin the one-handed sign rule, regrip protection and sensitivity separation.
+
+## ADR-012 — Cruise traffic regime (old-arcade constant gas)
+
+**Date:** 2026-09-23 · **Status:** accepted
+
+**Context.** User feedback after v1.0.0: (1) traffic should be present from the first seconds, not appear "after a while"; (2) the car should not accelerate forever — hold gas at a constant ~70–80 km/h cruise "like the old games", always on full throttle, never needing to brake.
+
+**Decision.**
+1. **`vCruise` per car** (80 km/h Falcone/Vipera, 75 Bruto): a second soft limiter that zeroes drive force at the cap. `vMax` remains physics headroom only. Gears spread across `vCruise` (80 km/h = top of 7th, high rpm — the "singing engine" arcade feel); downforce normalizes over `vCruise` (full stick at cruise).
+2. **Whole speed regime rescaled:** traffic families 8.5–16.5 m/s (30–60 km/h) so the player always overtakes at a weave-able 4–10 m/s; event injectors ~½ speed and placed 160–240 m ahead; near-miss closing floor 11.1→3 m/s; whoosh/fast-pass thresholds rescaled; speed lines visible from ~43 km/h; passive score floor 80→35 km/h (cruising always scores).
+3. **Traffic from frame one:** `TrafficSystem.warmup()` pre-populates the corridor around the player through the normal fairness-checked spawn rules (near-min 40 m); steady spawn window tightened to 110–300 m; base density 6.5→8 veh/km/lane.
+
+**Consequences.** Closing speeds are small, which exposed two real `hasEscape` semantics bugs: a barely-slower neighbour (≤1.5 m/s) is matchable within a second and must not count as a wall, and an agent BEHIND that the player outruns can never block a lane — both fixed (direction-aware). The soak bot now keeps a survivable following envelope (the invariant's own premise: an escape exists for a player who keeps one). Validation targets are cruise-regime (`targetCruise` 0→75 km/h s, `targetBrake` cruise→0 m, slalom near cruise). Old saves unaffected (no settings change).
