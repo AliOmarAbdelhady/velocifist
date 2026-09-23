@@ -6,3 +6,4 @@ coverage/
 *.log
 .vite/
 dist-pages/
+.certs/

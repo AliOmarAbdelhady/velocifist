@@ -12,7 +12,8 @@ const WebSocket = require2('ws');
 const RELAY_PORT = 8090;
 
 // ---- boot the real relay ----
-const relay = spawn('node', ['scripts/remote-relay.mjs', '--port', String(RELAY_PORT)], {
+// --https-port 0: ephemeral, so a long-running dev relay on 8443 can't collide
+const relay = spawn('node', ['scripts/remote-relay.mjs', '--port', String(RELAY_PORT), '--https-port', '0'], {
   cwd: process.cwd(),
   stdio: ['ignore', 'pipe', 'pipe'],
 });

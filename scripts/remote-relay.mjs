@@ -13,10 +13,14 @@
 // pings for latency, rumble on crashes. One phone + one game per relay
 // (personal use). Nothing leaves the local network.
 import { createServer } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { networkInterfaces } from 'node:os';
+import { execSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
@@ -25,6 +29,9 @@ const require = createRequire(import.meta.url);
 const { WebSocketServer } = require('ws');
 
 const PORT = Number(process.argv.includes('--port') ? process.argv[process.argv.indexOf('--port') + 1] : 8080);
+const HTTPS_PORT = Number(
+  process.argv.includes('--https-port') ? process.argv[process.argv.indexOf('--https-port') + 1] : 8443,
+);
 const SERVE = process.argv.includes('--serve');
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -49,7 +56,7 @@ const PHONE_PAGE = `<!doctype html>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e14; color: #e8ecf4;
     font-family: system-ui, sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
-  #app { position: fixed; inset: 0; display: flex; }
+  #app { position: fixed; inset: 0 0 50px 0; display: flex; }
   #wheelZone { flex: 1.2; position: relative; display: flex; align-items: center; justify-content: center; }
   #wheel { width: min(46vh, 42vw); height: min(46vh, 42vw); border-radius: 50%;
     border: 10px solid #2a3346; border-top-color: #ff5a3c; background: radial-gradient(circle, #141a26 60%, #0e131d);
@@ -67,7 +74,7 @@ const PHONE_PAGE = `<!doctype html>
     justify-content: space-between; padding: 0 14px; font: 700 12px ui-monospace, monospace;
     background: rgba(0,0,0,.45); z-index: 5; }
   #status { color: #ffb01f; } #status.ok { color: #43d17a; }
-  #rotate { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+  #rotate { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 8;
     background: #0b0e14; z-index: 9; text-align: center; padding: 30px; font-size: 17px; line-height: 1.6; }
   @media (orientation: portrait) { #rotate { display: flex; } }
 </style></head>
@@ -131,9 +138,58 @@ function bindPedal(el, key) {
 }
 bindPedal(gas, 'th'); bindPedal(brake, 'br');
 
-// spring the wheel back when released
+// ---- tilt steering (hold the phone like a wheel and TURN it) ----
+// math mirrors src/input/tilt.ts exactly — keep them in sync
+const RAD = Math.PI / 180;
+function orientationToWheel(beta, gamma) {
+  return Math.atan2(Math.sin(beta * RAD), Math.sin(gamma * RAD)) * 180 / Math.PI;
+}
+function wheelToSteer(wheelDeg, calibDeg, fullLockDeg) {
+  var d = wheelDeg - calibDeg;
+  d = d > 180 ? d - 360 : d < -180 ? d + 360 : d;
+  return Math.max(-1, Math.min(1, d / fullLockDeg));
+}
+let tiltOn = false, tiltCalib = 0, tiltAngle = 0, tiltEvents = 0;
+const btnTilt = document.getElementById('btnTilt'), btnCal = document.getElementById('btnCal');
+function onOrient(ev) {
+  tiltEvents++;
+  if (ev.beta === null) return;
+  tiltAngle = orientationToWheel(ev.beta, ev.gamma);
+}
+async function enableTilt() {
+  // iOS 13+ requires an explicit permission grant from a user gesture
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
+      const p = await DeviceOrientationEvent.requestPermission();
+      if (p !== 'granted') { status.textContent = 'tilt blocked'; return; }
+    }
+  } catch (e) { /* non-iOS */ }
+  window.addEventListener('deviceorientation', onOrient);
+  tiltOn = true;
+  btnTilt.textContent = 'TILT: on';
+  btnTilt.style.background = '#35c455'; btnTilt.style.color = '#06230e';
+  status.textContent = 'tilt ready — hold & turn like a wheel';
+  // if no events arrive (insecure page / no sensor), say so clearly
+  setTimeout(() => {
+    if (tiltEvents === 0) status.textContent = 'no sensor — use the https:// link';
+  }, 1500);
+  calibrate();
+}
+function calibrate() {
+  tiltCalib = tiltAngle;
+  if (navigator.vibrate) navigator.vibrate(20);
+}
+btnTilt.addEventListener('click', () => { if (!tiltOn) enableTilt(); else {
+  tiltOn = false; btnTilt.textContent = 'TILT: off';
+  btnTilt.style.background = '#2a3346'; btnTilt.style.color = '#cfd6e4';
+  window.removeEventListener('deviceorientation', onOrient);
+} });
+btnCal.addEventListener('click', calibrate);
+
+// spring the wheel back when released (drag mode only)
 function frame() {
-  if (wheelTouch === null && wheelAngle !== 0) wheelAngle *= 0.82;
+  if (!tiltOn && wheelTouch === null && wheelAngle !== 0) wheelAngle *= 0.82;
+  if (tiltOn) wheelAngle = (wheelToSteer(tiltAngle, tiltCalib, 95)) * 150;
   wheel.style.transform = 'rotate(' + wheelAngle.toFixed(1) + 'deg)';
   requestAnimationFrame(frame);
 }
@@ -142,8 +198,9 @@ requestAnimationFrame(frame);
 // ---- send at 60 Hz ----
 setInterval(() => {
   if (ws && ws.readyState === 1) {
-    ws.send(JSON.stringify({ t: 'i', s: +(wheelAngle / 150).toFixed(3),
-      th: state.th, br: state.br }));
+    var steer = tiltOn ? +(wheelToSteer(tiltAngle, tiltCalib, 95)).toFixed(3)
+                       : +(wheelAngle / 150).toFixed(3);
+    ws.send(JSON.stringify({ t: 'i', s: steer, th: state.th, br: state.br }));
   }
 }, 16);
 connect();
@@ -191,7 +248,41 @@ if (SERVE) {
   );
 }
 
+// Tilt steering needs deviceorientation, which browsers only grant on
+// SECURE pages — serve the same app over https with a cached self-signed
+// cert (the phone accepts the warning once; after that sensors work).
+function ensureCert() {
+  const dir = join(ROOT, '.certs');
+  const key = join(dir, 'relay-key.pem');
+  const cert = join(dir, 'relay-cert.pem');
+  try {
+    readFileSync(cert);
+    readFileSync(key);
+    return { key: readFileSync(key), cert: readFileSync(cert) };
+  } catch {
+    mkdirSync(dir, { recursive: true });
+    console.log('generating self-signed relay certificate (one time)…');
+    execSync(
+      `openssl req -x509 -newkey rsa:2048 -nodes -days 3650 ` +
+        `-keyout ${key} -out ${cert} -subj "/CN=velocifist-relay" ` +
+        `-addext "subjectAltName=IP:192.168.1.3,DNS:localhost"`,
+      { stdio: 'pipe' },
+    );
+    return { key: readFileSync(key), cert: readFileSync(cert) };
+  }
+}
+let httpsServer = null;
+try {
+  httpsServer = createHttpsServer(ensureCert(), (req, res) => {
+    server.emit('request', req, res);
+  });
+  httpsServer.listen(HTTPS_PORT, '0.0.0.0');
+} catch (e) {
+  console.warn('https listener unavailable (tilt steering needs it):', e.message);
+}
+
 const wss = new WebSocketServer({ server });
+if (httpsServer) new WebSocketServer({ server: httpsServer });
 let phone = null;
 let game = null;
 wss.on('connection', (ws, req) => {
@@ -233,7 +324,8 @@ server.listen(PORT, '0.0.0.0', () => {
     .map((i) => i.address);
   console.log(`VELOCIFIST remote relay on port ${PORT}`);
   for (const ip of ips) {
-    console.log(`  phone:  http://${ip}:${PORT}/phone`);
+    console.log(`  phone (TILT steering): https://${ip}:${HTTPS_PORT}/phone`);
+    console.log(`  phone (drag wheel):    http://${ip}:${PORT}/phone`);
     if (SERVE) console.log(`  game:   http://${ip}:${PORT}/`);
     else console.log(`  game:   connect via Options → Controllers → ws://${ip}:${PORT}`);
   }
