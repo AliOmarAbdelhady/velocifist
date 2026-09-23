@@ -31,7 +31,7 @@ import { TelemetryRecorder, type RunTelemetry } from './core/telemetry';
 import { forwardAssist, applyAssist, type AssistView } from './sim/assist';
 import { resolveReducedMotion, deriveComfort, prefersReducedMotion } from './core/motion';
 import { OptionsPanel } from './ui/options';
-import { GamepadInput, RemoteInput, ManualMerge } from './input/devices';
+import { GamepadInput, RemoteInput, ManualMerge, normalizeRelayUrl } from './input/devices';
 import { ASSIST_LEVELS, type AssistParams, type AssistLevel } from './sim/assist';
 import type { TrackerLike } from './render/pip';
 
@@ -65,13 +65,12 @@ const remote = new RemoteInput();
 const manual = new ManualMerge();
 
 function connectRemote(url: string): void {
-  const clean = url.replace(/^http/, 'ws').replace(/\/$/, '');
-  remote.connect(clean.includes('://') ? clean : `ws://${clean}`);
+  remote.connect(normalizeRelayUrl(url, location.protocol));
 }
 // relay-hosted game (scripts/remote-relay.mjs --serve) auto-connects; the
 // ?relay=host:port param does it for games served elsewhere
 if ((window as { __VFC_RELAY?: boolean }).__VFC_RELAY) {
-  connectRemote(`ws://${location.host}`);
+  connectRemote(location.host); // page protocol picks ws vs wss
 } else {
   const rp = new URLSearchParams(location.search).get('relay');
   if (rp) connectRemote(rp);

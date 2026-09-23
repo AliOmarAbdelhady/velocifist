@@ -44,3 +44,27 @@ describe('wheelToSteer', () => {
     expect(wheelToSteer(47.5, 0)).toBeCloseTo(0.5, 6);
   });
 });
+
+describe('normalizeRelayUrl (production phone remote)', () => {
+  it('bare host picks the scheme from the page protocol', () => {
+    expect(normalizeRelayUrl('192.168.1.3:8080', 'http:')).toBe('ws://192.168.1.3:8080');
+    expect(normalizeRelayUrl('192.168.1.3:8443', 'https:')).toBe('wss://192.168.1.3:8443');
+  });
+
+  it('http(s):// input maps to ws(s)://', () => {
+    expect(normalizeRelayUrl('http://192.168.1.3:8080/', 'http:')).toBe('ws://192.168.1.3:8080');
+    expect(normalizeRelayUrl('https://192.168.1.3:8443', 'https:')).toBe('wss://192.168.1.3:8443');
+  });
+
+  it('an https page NEVER opens ws:// (mixed content) — forced to wss', () => {
+    expect(normalizeRelayUrl('ws://192.168.1.3:8080', 'https:')).toBe('wss://192.168.1.3:8080');
+    expect(normalizeRelayUrl('http://192.168.1.3:8080', 'https:')).toBe('wss://192.168.1.3:8080');
+  });
+
+  it('explicit wss and localhost http pages keep their scheme', () => {
+    expect(normalizeRelayUrl('wss://example.com', 'https:')).toBe('wss://example.com');
+    expect(normalizeRelayUrl('ws://127.0.0.1:8080', 'http:')).toBe('ws://127.0.0.1:8080');
+  });
+});
+
+import { normalizeRelayUrl } from '../src/input/devices';

@@ -207,6 +207,17 @@ connect();
 </script></body></html>`;
 
 const server = createServer(async (req, res) => {
+  // Private-Network-Access preflight: a public https page (the live site)
+  // reaching a LAN relay may be asked to preflight — allow it
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Private-Network': 'true',
+    });
+    res.end();
+    return;
+  }
   try {
     const path = req.url.split('?')[0];
     if (path === '/' || path === '/phone') {
@@ -282,10 +293,12 @@ try {
 }
 
 const wss = new WebSocketServer({ server });
-if (httpsServer) new WebSocketServer({ server: httpsServer });
+if (httpsServer) new WebSocketServer({ server: httpsServer }).on('connection', handleConnection);
+wss.on('connection', handleConnection);
 let phone = null;
 let game = null;
-wss.on('connection', (ws, req) => {
+
+function handleConnection(ws, req) {
   const isPhone = req.url === '/phone-ws';
   if (isPhone) {
     phone = ws;
@@ -315,7 +328,7 @@ wss.on('connection', (ws, req) => {
       if (m.t === 'ping' && ws.readyState === 1) ws.send(JSON.stringify({ t: 'pong', id: m.id }));
     });
   }
-});
+}
 
 server.listen(PORT, '0.0.0.0', () => {
   const ips = Object.values(networkInterfaces())

@@ -8,6 +8,27 @@ import type { DriverIntent } from '../sim/intent';
 
 const DEADZONE = 0.12;
 
+/**
+ * Normalize anything the user types into a relay WebSocket URL (pure — tested).
+ * '192.168.1.3:8443' → ws:// or wss:// depending on the PAGE's protocol: an
+ * https page (the production site) can never open ws:// — mixed content is
+ * blocked — so insecure schemes are upgraded to wss when the page is https.
+ */
+export function normalizeRelayUrl(input: string, pageProtocol: string): string {
+  let u = input.trim().replace(/\/$/, '');
+  if (/^wss?:\/\//.test(u)) {
+    // keep an explicit scheme, but https pages cannot use ws://
+  } else if (/^https?:\/\//.test(u)) {
+    u = (u.startsWith('https') ? 'wss://' : 'ws://') + u.replace(/^https?:\/\//, '');
+  } else {
+    u = (pageProtocol === 'https:' ? 'wss://' : 'ws://') + u;
+  }
+  if (pageProtocol === 'https:' && u.startsWith('ws://')) {
+    u = 'wss://' + u.slice('ws://'.length);
+  }
+  return u;
+}
+
 /** Map a standard-mapped gamepad to intent (pure — tested). */
 export function gamepadIntent(
   pad: { axes: readonly number[]; buttons: readonly { value: number; pressed: boolean }[] },
