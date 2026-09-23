@@ -33,7 +33,10 @@ import { resolveReducedMotion, deriveComfort, prefersReducedMotion } from './cor
 import { OptionsPanel } from './ui/options';
 import { GamepadInput, RemoteInput, ManualMerge, normalizeRelayUrl } from './input/devices';
 import { ASSIST_LEVELS, type AssistParams, type AssistLevel } from './sim/assist';
+import { VersusPanel } from './ui/versus';
+import { VersusSession, type VsOutcome } from './net/session';
 import type { TrackerLike } from './render/pip';
+import type { SpinePoint } from './sim/road';
 
 const overlay = document.getElementById('overlay')!;
 const camchoice = document.getElementById('camchoice')!;
@@ -151,6 +154,41 @@ window.addEventListener('keydown', (e) => {
 
 applyPipLayout(persist.settings);
 
+// ------------------------------------------------- ADR-018 versus lobby
+// invite-code 1v1 ghost race: the panel owns the VersusSession until the
+// config is agreed, then hands it to a versus-mode Game (same loop, seeded
+// world, ghost opponent). peerjs itself loads lazily inside MatchLink.
+const versusCountdownEl = document.getElementById('countdown')!;
+const hudVersusEl = document.getElementById('hudVersus')!;
+let versusSession: VersusSession | null = null;
+let currentGame: Game | null = null; // hoisted: the versus callbacks close over it
+
+const versusPanel = new VersusPanel(
+  persist.settings.car,
+  (session) => {
+    versusSession = session;
+    const tune = CAR_TUNES.find((t) => t.id === persist.settings.car) ?? CAR_TUNES[0];
+    currentGame?.dispose();
+    getTrackerFn = null;
+    getPipFn = null;
+    currentGame = new Game(() => null, () => null, tune, undefined, session);
+  },
+  () => {
+    versusSession = null;
+    versusPanelReset();
+    showGarage();
+  },
+);
+// break the panel↔flow cycle for rematch resets (declared after use is fine:
+// it only runs on user interaction)
+function versusPanelReset(): void {
+  versusPanel.reset();
+}
+document.getElementById('btnGarageVs')!.addEventListener('click', () => {
+  document.getElementById('garage')!.classList.add('hidden');
+  versusPanel.open();
+});
+
 // PWA (M10): offline-after-first-visit. Production only — dev/preview servers
 // don't need a cache and HMR would fight it. Relative path keeps the scope
 // correct on GitHub Pages sub-paths and custom domains alike. The page primes
@@ -184,7 +222,13 @@ class Game {
   private readonly arbiter = new InputArbiter();
   readonly quality: QualityManager;
   private readonly onRetryClick = (): void => this.retry();
-  private readonly onGarageClick = (): void => this.toGarage();
+  private readonly onGarageClick = (): void => {
+    if (this.versus) {
+      this.leaveVersus();
+      return;
+    }
+    this.toGarage();
+  };
 
   private loop: Loop | null = null;
   private road: RoadSystem;
@@ -216,12 +260,15 @@ class Game {
   private smashAgent: import('./sim/trafficTypes').TrafficAgent | null = null;
   /** dev backdoor (?instantwreck=1): results/export E2E without a chase */
   private instantWreck = false;
+  /** ADR-018 versus: terminal verdict from the session, once */
+  private vsOutcome: { won: boolean; outcome: VsOutcome } | null = null;
 
   constructor(
     private readonly getTracker: () => TrackerLike | null,
     private readonly getPip: () => PipRenderer | null,
     tune: CarTune,
     note?: string,
+    private readonly versus: VersusSession | null = null,
     private readonly devices: {
       gamepad: GamepadInput;
       remote: RemoteInput;
@@ -232,7 +279,8 @@ class Game {
     if (!pinnedTheme) {
       nextTheme = THEME_ORDER[(THEME_ORDER.indexOf(nextTheme) + 1) % THEME_ORDER.length];
     }
-    const runSeed = (Date.now() & 0x7fffffff) >>> 0;
+    // ADR-018: a versus race runs the agreed seed — identical worlds
+    const runSeed = this.versus?.startSeed ?? ((Date.now() & 0x7fffffff) >>> 0);
     this.road = new RoadSystem({ seed: runSeed, theme: this.theme });
     this.director = new DifficultyDirector(runSeed);
     this.events = new EventDirector(runSeed);
@@ -270,6 +318,24 @@ class Game {
     this.scene.applyQuality(this.quality.preset);
     this.scene.setComfort(comfortFromSettings());
     this.setAssistLevel(persist.settings.driverAid);
+    if (this.versus) {
+      // ghost opponent in THEIR car, versus HUD + countdown, results buttons
+      const ghostTune = CAR_TUNES.find((t) => t.id === this.versus!.opponentCarId) ?? tune;
+      this.scene.showGhost(ghostTune);
+      hudVersusEl.classList.remove('hidden');
+      versusCountdownEl.classList.remove('hidden');
+      this.versus.onFinish = (won, outcome) => {
+        this.vsOutcome = { won, outcome };
+        if (this.phase === 'driving') this.enterVersusResults();
+      };
+      document.getElementById('btnRetryRun')!.classList.add('hidden');
+      document.getElementById('btnVsRematch')!.classList.remove('hidden');
+      document.getElementById('btnVsLeave')!.classList.remove('hidden');
+      document.getElementById('btnVsRematch')!.addEventListener('click', this.onVsRematch);
+      document.getElementById('btnVsLeave')!.addEventListener('click', this.onVsLeave);
+      document.getElementById('btnVsQuit')!.classList.remove('hidden');
+      document.getElementById('btnVsQuit')!.addEventListener('click', this.onVsLeave);
+    }
     audio?.retune(tune);
     audio?.setRunning(true);
     this.scene.setDamageState('PRISTINE');
@@ -341,9 +407,14 @@ class Game {
     }
 
     const wrecked = this.phase === 'wrecked';
-    const intent = wrecked
+    let intent = wrecked
       ? { steer: this.arbiter.intent.steer * 0.4, throttle: 0, brake: 0.35 }
       : this.arbiter.intent;
+    // versus: nobody moves before GO (the world stays alive behind the gate)
+    const vsRace = this.versus?.race ?? null;
+    if (vsRace && vsRace.phase === 'countdown') {
+      intent = { steer: 0, throttle: 0, brake: 0.4 };
+    }
 
     // EASY (M7): forward-collision mitigation coaxes the brakes when a
     // closing agent is in the player's path — never steers, never slams
@@ -364,6 +435,19 @@ class Game {
 
     this.car.step(dt, intent);
     this.traffic.update(dt, this.car, this.px, this.pz);
+
+    // ADR-018: 15 Hz pose stream (road-frame — rebase-proof) + race clock
+    if (this.versus) {
+      this.road.sample(this.traffic.playerS, VS_SPINE);
+      let hRel = this.car.heading - VS_SPINE.heading;
+      while (hRel > Math.PI) hRel -= 2 * Math.PI;
+      while (hRel < -Math.PI) hRel += 2 * Math.PI;
+      this.versus.sendPose(
+        this.traffic.playerS, this.traffic.playerLat, hRel, this.car.u, this.car.distance,
+        performance.now() / 1000,
+      );
+      this.versus.tick(dt, this.car.distance);
+    }
 
     // ---- events: main owns the drain order (scoring + damage both feed) ----
     const crashes = this.traffic.takeCrashes();
@@ -404,8 +488,13 @@ class Game {
 
     if (this.damage.wrecked && !wrecked && this.phase === 'driving') {
       this.phase = 'wrecked';
+      if (this.versus) this.versus.localWreck(); // instant loss (ADR-018)
     }
     if (this.phase === 'wrecked' && this.damage.wreckTimer > 2.2) {
+      if (this.versus) {
+        this.enterVersusResults();
+        return;
+      }
       this.phase = 'results';
       audio?.setRunning(false);
       this.hud.show(false);
@@ -457,6 +546,33 @@ class Game {
       heading: this.ph + (this.car.heading - this.ph) * alpha,
     };
     this.coneHits += this.scene.update(pose, this.car, this.traffic, frameDt, performance.now() / 1000);
+    if (this.versus) {
+      const rem = this.versus.remote;
+      if (rem && this.versus.remoteAgeSec < 3) {
+        this.scene.updateGhost(rem.s, rem.lat, rem.hRel, rem.u, frameDt);
+      }
+      const race = this.versus.race;
+      if (race) {
+        if (race.phase === 'countdown') {
+          versusCountdownEl.classList.remove('hidden');
+          versusCountdownEl.textContent = String(Math.max(1, Math.ceil(race.countdown)));
+          hudVersusEl.textContent = 'GET READY';
+        } else {
+          if (race.phase === 'racing' && race.time < 1.0) {
+            versusCountdownEl.classList.remove('hidden');
+            versusCountdownEl.textContent = 'GO';
+          } else {
+            versusCountdownEl.classList.add('hidden');
+          }
+          const gap = race.gap;
+          hudVersusEl.textContent =
+            race.phase === 'racing' || race.phase === 'finished'
+              ? `${race.position}${race.position === 1 ? 'st' : 'nd'} · ${gap >= 0 ? '+' : ''}${Math.round(gap)} m` +
+                (this.versus.pingMs !== null ? ` · ${Math.round(this.versus.pingMs)} ms` : '')
+              : '';
+        }
+      }
+    }
     pip?.draw();
     audio?.updateEngine(this.car, frameDt);
     this.quality.observeFrame(frameDt * 1000);
@@ -526,10 +642,11 @@ class Game {
     else if (e.code === 'Digit1') this.switchCar(0);
     else if (e.code === 'Digit2') this.switchCar(1);
     else if (e.code === 'Digit3') this.switchCar(2);
-    else if (this.phase === 'results' && (e.code === 'KeyR' || e.code === 'Enter')) {
+    else if (this.phase === 'results' && !this.versus && (e.code === 'KeyR' || e.code === 'Enter')) {
       this.retry();
     } else if (this.phase === 'results' && e.code === 'KeyG') {
-      this.toGarage();
+      if (this.versus) this.leaveVersus();
+      else this.toGarage();
     }
   };
 
@@ -572,9 +689,53 @@ class Game {
     showGarage();
   }
 
+  /** ADR-018: versus verdict → shared results screen with VICTORY/DEFEAT */
+  private enterVersusResults(): void {
+    if (this.phase === 'results') return;
+    this.phase = 'results';
+    audio?.setRunning(false);
+    this.hud.show(false);
+    versusCountdownEl.classList.add('hidden');
+    this.runTelemetry = this.telemetry.finish(this.runT, this.scoring, this.damage);
+    const oc = this.vsOutcome;
+    const how = describeVsOutcome(oc?.outcome);
+    this.resultsScreen.show(
+      this.scoring, this.car, this.themeName, this.runT, persist, this.runTelemetry,
+      oc ? { title: oc.won ? 'VICTORY' : 'DEFEAT', line: `${how} · ${(this.traffic.playerS / 1000).toFixed(2)} km driven` } : null,
+    );
+  }
+
+  private readonly onVsRematch = (): void => {
+    if (!this.versus) return;
+    // host reseeds + restarts both sides; guest asks (host auto-accepts)
+    if (this.versus.isHost) this.versus.sendRematch();
+    else this.versus.requestRematch();
+  };
+
+  private readonly onVsLeave = (): void => this.leaveVersus();
+
+  private leaveVersus(): void {
+    this.versus?.leave();
+    versusSession = null;
+    versusPanelReset();
+    this.dispose();
+    showGarage();
+  }
+
   dispose(): void {
     this.loop?.stop();
     this.loop = null;
+    // versus chrome off (a rematch re-shows it in the next Game)
+    document.getElementById('btnRetryRun')!.classList.remove('hidden');
+    document.getElementById('btnVsRematch')!.classList.add('hidden');
+    document.getElementById('btnVsLeave')!.classList.add('hidden');
+    document.getElementById('btnVsRematch')!.removeEventListener('click', this.onVsRematch);
+    document.getElementById('btnVsLeave')!.removeEventListener('click', this.onVsLeave);
+    document.getElementById('btnVsQuit')!.classList.add('hidden');
+    document.getElementById('btnVsQuit')!.removeEventListener('click', this.onVsLeave);
+    hudVersusEl.classList.add('hidden');
+    versusCountdownEl.classList.add('hidden');
+    this.scene.hideGhost();
     audio?.setRunning(false);
     this.resultsScreen.hide();
     this.hud.show(false);
@@ -586,8 +747,6 @@ class Game {
 }
 
 // -------------------------------------------------------------------- flow
-
-let currentGame: Game | null = null;
 
 const garage = new Garage(
   persist,
@@ -755,6 +914,20 @@ async function recalibrateHands(): Promise<void> {
   document.body.appendChild(pipwrap); // PiP back to its corner
   wizardRoot.classList.add('hidden');
   currentGame?.setPaused(false);
+}
+
+const VS_SPINE: SpinePoint = { x: 0, z: 0, heading: 0 };
+
+function describeVsOutcome(outcome: VsOutcome | undefined): string {
+  switch (outcome) {
+    case 'win-distance': return 'first to the finish';
+    case 'loss-distance': return 'opponent got there first';
+    case 'win-wreck': return 'opponent wrecked';
+    case 'loss-wreck': return 'you wrecked';
+    case 'win-disconnect': return 'opponent disconnected';
+    case 'loss-disconnect': return 'you disconnected';
+    default: return 'race over';
+  }
 }
 
 overlay.addEventListener(

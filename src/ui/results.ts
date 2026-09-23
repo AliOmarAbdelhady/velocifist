@@ -39,6 +39,7 @@ export class ResultsScreen {
     durationSec: number,
     persist: PersistenceService,
     telemetry: RunTelemetry | null = null,
+    versus: { title: string; line: string } | null = null,
   ): ScoreEntry {
     this.telemetry = telemetry;
     this.exportBtn.classList.toggle('hidden', telemetry === null);
@@ -58,10 +59,11 @@ export class ResultsScreen {
     const isBest = persist.isNewBest(entry.score);
     persist.recordRun(entry, scoring.score);
 
-    this.title.textContent = c.crashes > 0 ? 'WRECKED' : 'RUN COMPLETE';
+    this.title.textContent = versus ? versus.title : c.crashes > 0 ? 'WRECKED' : 'RUN COMPLETE';
     this.newBest.classList.toggle('hidden', !isBest);
     this.score.textContent = entry.score.toLocaleString();
     const rows: Array<[string, string]> = [
+      ...(versus ? ([['versus', versus.line]] as Array<[string, string]>) : []),
       ['near misses (inches / close / near)', `${totalNear} (${c.inches} / ${c.veryClose} / ${c.near})`],
       ['oncoming near misses', String(c.oncomingNearMiss)],
       ['clean passes (fast)', `${c.cleanPass} (${c.cleanPassFast})`],

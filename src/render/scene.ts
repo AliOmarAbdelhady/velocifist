@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import type { Car, CarTune } from '../sim/car';
 import type { TrafficSystem } from '../sim/traffic';
-import { RoadSystem, type Projection, type ThemeId } from '../sim/road';
+import { RoadSystem, type Projection, type SpinePoint, type ThemeId } from '../sim/road';
 import { CarView, type CarPose } from './carView';
 import { CameraRig } from './cameraRig';
 import { Cones } from './cones';
@@ -61,6 +61,7 @@ export class GameScene {
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
   private readonly carView: CarView;
+  private ghostView: CarView | null = null;
   private readonly cones = new Cones();
   private readonly trafficView = new TrafficRenderer();
   private readonly env: EnvironmentRenderer;
@@ -193,6 +194,63 @@ export class GameScene {
     this.fx.rebase(dz);
   }
 
+  // ------------------------------------------------------- ADR-018 ghost
+  // The opponent arrives as ROAD-frame pose (s, lat, relative heading) —
+  // rebase-proof: both worlds share a seed, but each client rebases its own
+  // world z independently, so raw world z would be off by multiples of
+  // 4096 m. Reconstructing through OUR spine keeps the ghost exact.
+
+  showGhost(tune: CarTune): void {
+    if (this.ghostView) return;
+    this.ghostView = new CarView(tune, true);
+    this.ghostView.setNight(this.theme === 'neon');
+    this.ghostView.group.visible = false;
+    this.scene.add(this.ghostView.group);
+  }
+
+  hideGhost(): void {
+    this.ghostView?.dispose();
+    if (this.ghostView) this.scene.remove(this.ghostView.group);
+    this.ghostView = null;
+  }
+
+  private readonly ghostPose: CarPose = { x: 0, z: 0, heading: 0 };
+  private readonly ghostSp: SpinePoint = { x: 0, z: 0, heading: 0 };
+  private ghostShown = false;
+
+  /** Smoothly render the opponent at their latest pose (15 Hz stream). */
+  updateGhost(s: number, lat: number, hRel: number, u: number, frameDt: number): void {
+    const ghost = this.ghostView;
+    if (!ghost) return;
+    this.road.sample(Math.max(0, s), this.ghostSp);
+    const rx = Math.cos(this.ghostSp.heading);
+    const rz = Math.sin(this.ghostSp.heading);
+    const tx = this.ghostSp.x + rx * lat;
+    const tz = this.ghostSp.z + rz * lat;
+    const th = this.ghostSp.heading + hRel;
+    if (!this.ghostShown) {
+      this.ghostPose.x = tx;
+      this.ghostPose.z = tz;
+      this.ghostPose.heading = th;
+      this.ghostShown = true;
+      ghost.group.visible = true;
+    } else {
+      // exponential smoothing (≈80 ms settle) hides 15 Hz stream stepping
+      const k = 1 - Math.exp(-14 * frameDt);
+      this.ghostPose.x += (tx - this.ghostPose.x) * k;
+      this.ghostPose.z += (tz - this.ghostPose.z) * k;
+      let dh = th - this.ghostPose.heading;
+      while (dh > Math.PI) dh -= 2 * Math.PI;
+      while (dh < -Math.PI) dh += 2 * Math.PI;
+      this.ghostPose.heading += dh * k;
+    }
+    ghost.update(this.ghostPose, GHOST_CAR_STUB(u), frameDt);
+  }
+
+  get ghostVisible(): boolean {
+    return this.ghostShown;
+  }
+
   /** @returns construction cones knocked over by the car this frame */
   update(pose: CarPose, car: Car, traffic: TrafficSystem | null, frameDt: number, timeSec: number): number {
     this.road.project(pose.x, pose.z, this.proj);
@@ -239,6 +297,7 @@ export class GameScene {
 
   dispose(): void {
     window.removeEventListener('resize', this.onResize);
+    this.hideGhost();
     this.cones.dispose();
     this.ribbon.dispose();
     this.env.dispose();
@@ -264,4 +323,13 @@ export class GameScene {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.syncGradeSize();
   };
+}
+
+/** CarView.update reads only these dynamics fields — the ghost fakes them. */
+function GHOST_CAR_STUB(u: number): Car {
+  return {
+    u, w: 0, omega: 0, steer: 0,
+    axLast: 0, ayLast: 0, beta: 0,
+    throttleIn: 0, brakeIn: 0,
+  } as unknown as Car;
 }

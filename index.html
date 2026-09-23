@@ -69,6 +69,23 @@
     #pipwrap.pip-tr { right: 14px; left: auto; top: 14px; bottom: auto; }
     #pipwrap.pip-bl { left: 14px; right: auto; top: auto; bottom: 14px; }
     #pipwrap.pip-br { right: 14px; left: auto; top: auto; bottom: 14px; }
+    /* ---- ADR-018 versus ---- */
+    #versus .vs-box { display: flex; gap: 44px; margin: 18px 0 8px; flex-wrap: wrap; justify-content: center; }
+    .vs-side { display: flex; flex-direction: column; align-items: center; gap: 12px; min-width: 250px; }
+    .vs-code { font: 700 46px ui-monospace, monospace; letter-spacing: 0.32em; color: #2f9ce0;
+      background: rgba(47,156,224,0.1); border: 1px solid rgba(47,156,224,0.45);
+      padding: 10px 16px 10px 26px; border-radius: 12px; }
+    #vsJoinInput { font: 700 30px ui-monospace, monospace; letter-spacing: 0.28em; text-transform: uppercase;
+      text-align: center; width: 230px; background: #1a2130; color: #e8ecf4; border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 8px; padding: 10px; }
+    #vsJoinInput:focus { outline: 1px solid #2f9ce0; }
+    #vsStatus { color: #ffb01f; min-height: 20px; }
+    #countdown { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 8;
+      font: 700 170px 'Segoe UI', system-ui, sans-serif; color: #2f9ce0;
+      text-shadow: 0 6px 42px rgba(47,156,224,0.6); pointer-events: none; }
+    #hudVersus { position: absolute; top: 14px; left: 70px; font: 700 16px ui-monospace, monospace;
+      color: #20c997; text-shadow: 0 2px 8px rgba(0,0,0,0.85); letter-spacing: 0.05em; }
+
     @media (prefers-reduced-motion: reduce) {
       .toast { animation: none; opacity: 0.9; }
       #handGlow.glow-lost { animation: none; }
@@ -181,12 +198,14 @@
     <div id="hudSpeed">
       <span class="kmh" id="hudKmh">0</span><span class="kmh" style="font-size:18px;"> km/h</span><span class="gear" id="hudGear">N</span>
     </div>
+    <div id="hudVersus" class="hidden"></div>
     <div id="hudToasts"></div>
     <div id="hudAssist">AUTO-BRAKE</div>
   </div>
 
   <div id="handGlow"></div>
   <button id="btnOptions" title="Options (O)" aria-label="Options">⚙</button>
+  <button id="btnVsQuit" title="Leave the versus match" class="hidden" style="position:fixed;top:12px;left:64px;z-index:6;width:44px;height:44px;border-radius:10px;border:1px solid rgba(255,90,60,0.5);background:rgba(60,16,10,0.6);color:#ff8f7a;font-size:18px;cursor:pointer;">✕</button>
   <div id="pipwrap" class="hidden"><canvas id="pip"></canvas></div>
 
   <div id="overlay" class="overlay">
@@ -195,6 +214,7 @@
     <p class="tag">BY ROBEN CLUB · ROBEN.CLUB · DESIGN YOUR FUTURE</p>
     <p class="keys">fists = throttle · open palms = brake · cross hands for lock</p>
     <p class="keys">keyboard always works: W/S · A/D · C camera · O options · 1/2/3 car</p>
+    <p class="keys">VERSUS — race a friend by invite code (garage → VERSUS)</p>
     <p class="keys">CLICK TO START</p>
   </div>
 
@@ -231,8 +251,28 @@
     <p class="keys" id="garageHint">← → choose · ENTER drive</p>
     <div class="garage-foot">
       <button id="btnGarageBack" class="secondary">back</button>
+      <button id="btnGarageVs" class="secondary">VERSUS</button>
       <button id="btnGarageGo">DRIVE</button>
     </div>
+  </div>
+
+  <div id="versus" class="overlay hidden">
+    <h1 style="font-size: 34px;">VERSUS</h1>
+    <p class="tag">invite a friend — send them your code · first to 5 km wins</p>
+    <div class="vs-box">
+      <div class="vs-side">
+        <button id="btnVsCreate">CREATE MATCH</button>
+        <div id="vsCodeBox" class="hidden">
+          <div class="vs-code" id="vsCode">—</div>
+        </div>
+      </div>
+      <div class="vs-side">
+        <input id="vsJoinInput" maxlength="7" placeholder="CODE" autocomplete="off" spellcheck="false" />
+        <button id="btnVsJoin" class="secondary">JOIN MATCH</button>
+      </div>
+    </div>
+    <p class="keys" id="vsStatus"></p>
+    <div><button id="btnVsBack" class="secondary">back</button></div>
   </div>
 
   <div id="options" class="overlay hidden">
@@ -359,9 +399,13 @@
     <div>
       <button id="btnRetryRun">RETRY</button>
       <button id="btnToGarage" class="secondary">garage</button>
+      <button id="btnVsRematch" class="secondary hidden">REMATCH</button>
+      <button id="btnVsLeave" class="secondary hidden">leave versus</button>
       <button id="btnExportRun" class="secondary hidden">export run data</button>
     </div>
   </div>
+
+  <div id="countdown" class="hidden"></div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

@@ -205,3 +205,10 @@
 - Visual QA loop (subagent passes): caught the invisible deck wordmark (moved to rear fascia), weak dusk marking contrast (asphalt #5e5e5e + tints ~0xb2aaa4 → CLEAR readability), uppercase title hiding the "RobEn" casing.
 - Verification: 238/238 tests, build green, deterministic crop review passed (wordmark readable, markings CLEAR, 7-8 posts with amber reflectors).
 - Docs: ADR-017, PILLs 113–115.
+
+### Session 19 (2026-09-23, M19) — versus multiplayer: invite-code 1v1 ghost race (ADR-018)
+- Transport: PeerJS WebRTC DataChannel (lazy chunk — solo payload untouched); free PeerJS cloud brokers the handshake; local `?broker=` override for e2e.
+- Match codes: 5 chars from an unambiguous alphabet; host claims `roben-race-<CODE>`, guest joins by code; host auto-starts on connect (hello → start with seed + target + 3.2 s countdown).
+- Race model: identical-seed worlds, 15 Hz road-frame pose stream (rebase-proof), translucent ghost opponent (no collision), live gap/position/ping HUD chip, first to 5 km wins, wreck = instant loss, disconnect = opponent wins; VICTORY/DEFEAT results with margin, host-authoritative rematch (reseed), leave (✕ during race, button on results).
+- Verification: 12 new unit tests (codes/protocol/state machine) — 250/253 total; build green; **e2e-m19: two real browser pages race a full match against a local PeerServer — code matchmake, synced countdowns, chip `1st · +2 m · 535 ms`, VICTORY/DEFEAT, rematch, leave→disconnect win, 0 console errors**.
+- Docs: ADR-018, PILLs 116–119, README versus section.

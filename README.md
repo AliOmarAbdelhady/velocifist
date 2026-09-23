@@ -12,6 +12,12 @@ Everything runs **100% locally in your browser** — hand tracking (MediaPipe)
 executes on-device, the video never leaves your machine, nothing is recorded
 or uploaded.
 
+**Versus multiplayer:** garage → **VERSUS** → *CREATE MATCH* and send the
+5-character code to a friend; they *JOIN* with it and you race the same
+world to 5 km — opponent rendered as a ghost, live gap + ping on the HUD,
+rematch and leave built in. Peer-to-peer (WebRTC); the free PeerJS cloud
+only brokers the handshake.
+
 **Play:** https://aliomarabdelhady.github.io/velocifist/ (Chrome/Edge
 recommended — hand tracking needs a webcam and decent light)
 

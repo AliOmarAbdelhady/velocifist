@@ -268,8 +268,13 @@ export class CarView {
   private wreckPose = { roll: 0, pitch: 0 };
   private baseColor = new THREE.Color();
   private sootColor = new THREE.Color(0x2c2e33);
+  /** ADR-018 versus: translucent, decal-free opponent ghost */
+  private readonly ghost: boolean;
+  private tune: CarTune;
 
-  constructor(private tune: CarTune) {
+  constructor(tune: CarTune, ghost = false) {
+    this.tune = tune;
+    this.ghost = ghost;
     this.build();
   }
 
@@ -415,6 +420,7 @@ export class CarView {
     this.materials.push(tipMat);
     this.group.add(this.bodyGroup);
 
+    if (!this.ghost) {
     // ---- ADR-017 RobEn livery: hood roundel + rear-deck wordmark ----
     const decalMat = (map: THREE.Texture): THREE.MeshStandardMaterial =>
       new THREE.MeshStandardMaterial({
@@ -450,6 +456,8 @@ export class CarView {
     this.bodyGroup.add(rear);
     this.geometries.push(rearGeo);
     this.materials.push(rear.material as THREE.Material);
+
+    }
 
     // ---- wheels: single cylinder per wheel; spoke texture lives on the
     // side caps (material groups: side / top cap / bottom cap) so the rims
@@ -490,9 +498,20 @@ export class CarView {
     const shadow = new THREE.Mesh(shadowGeo, shadowMat);
     shadow.position.y = 0.02;
     shadow.renderOrder = 2;
-    this.group.add(shadow);
+    if (!this.ghost) this.group.add(shadow);
     this.geometries.push(shadowGeo);
     this.materials.push(shadowMat);
+
+    if (this.ghost) {
+      // the opponent renders as a smooth translucent shell — clearly not
+      // physical (no collision), always readable over traffic
+      for (const m of this.materials) {
+        (m as THREE.MeshStandardMaterial).transparent = true;
+        (m as THREE.MeshStandardMaterial).opacity = 0.5;
+        (m as THREE.MeshStandardMaterial).depthWrite = false;
+      }
+      this.group.renderOrder = 5;
+    }
   }
 
   setTune(tune: CarTune): void {
