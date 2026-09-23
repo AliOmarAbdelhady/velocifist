@@ -56,7 +56,7 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
 
   it('brakes from cruise to 0 within ±15% of its target distance', () => {
     const c = new Car(tune);
-    expect(accelTo(c, tune.vCruise - 0.3)).toBe(true);
+    expect(accelTo(c, tune.vCruise - 1)).toBe(true); // outside the limiter's dead band
     const from = tune.vCruise - 1;
     let zStart = 0;
     let started = false;
@@ -246,20 +246,23 @@ describe('road guide (M4 curved world)', () => {
     expect(car.hash()).toBe(ref.hash()); // identical physics, straight guide
   });
 
-  it('EASY lane-keep assist holds a sloppy driver near lane centre', () => {
+  it('ADR-014: NO auto-recentering — an offset car keeps its lateral position (heading assist only)', () => {
     const road = RoadSystem.straight();
     const car = new Car(CAR_TUNES[0]);
     car.guide = road;
-    car.u = 30;
+    car.u = 25;
+    car.x = -5.5; // deliberate off-centre placement, hands OFF the wheel
     const pr = { s: 0, lat: 0 };
-    let maxLat = 0;
-    for (let i = 0; i < 60 * 60; i++) {
-      // aggressive sloppy steering — without assist this walks off the road
-      const intent = { steer: 0.22 * Math.sin(i * 0.021) + 0.1 * Math.sin(i * 0.11), throttle: 0.5, brake: 0 };
-      car.step(DT, intent);
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    for (let i = 0; i < 60 * 20; i++) {
+      car.step(DT, { steer: 0, throttle: 1, brake: 0 });
       road.project(car.x, car.z, pr);
-      maxLat = Math.max(maxLat, Math.abs(pr.lat));
+      minLat = Math.min(minLat, pr.lat);
+      maxLat = Math.max(maxLat, pr.lat);
     }
-    expect(maxLat).toBeLessThan(3.0); // held near the centre line
+    // the old centre pull would have dragged lat → 0; freedom means it stays
+    expect(Math.abs((minLat + maxLat) / 2 + 5.5)).toBeLessThan(2.5); // still ~where placed
+    expect(maxLat - minLat).toBeLessThan(4.5); // and not drifting away either
   });
 });

@@ -15,7 +15,7 @@ export interface StorageLike {
 }
 
 const PREFIX = 'vfc.';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 export interface GameSettings {
   schema: number;
@@ -39,8 +39,9 @@ export interface GameSettings {
   /** PiP corner + scale 0.6..1.5 of the 330×248 base */
   pipCorner: 'tl' | 'tr' | 'bl' | 'br';
   pipScale: number;
-  /** ADR-013 forward-collision aid: light (default) / full (M7 feel) / off */
-  driverAid: 'light' | 'full' | 'off';
+  /** ADR-014 forward-collision aid: off (user directive — zero driving
+   *  assistance) / light / full (M7 feel) */
+  driverAid: 'off' | 'light' | 'full';
 }
 
 export interface Progress {
@@ -76,7 +77,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   reducedMotion: 'auto',
   pipCorner: 'br',
   pipScale: 1,
-  driverAid: 'light',
+  driverAid: 'off',
 };
 
 export const DEFAULT_PROGRESS: Progress = {
@@ -161,7 +162,11 @@ export class PersistenceService {
   // --------------------------------------------------------------- settings
 
   get settings(): GameSettings {
-    return { ...DEFAULT_SETTINGS, ...this.read('settings', DEFAULT_SETTINGS) };
+    const s = { ...DEFAULT_SETTINGS, ...this.read('settings', DEFAULT_SETTINGS) };
+    // schema 3 (ADR-014): the user directed ZERO driving assistance —
+    // pre-existing 'light' saves migrate to 'off' once
+    if (s.schema < 3 && s.driverAid === 'light') s.driverAid = 'off';
+    return s;
   }
 
   setSettings(s: Partial<GameSettings>): void {

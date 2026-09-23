@@ -146,3 +146,16 @@ M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determi
 6. **Camera:** constant chase mount (6.0 m back, no speed pull-back), near-constant FOV (55°+9°) — the car stays the same apparent size at every speed.
 
 **Consequences.** The M7 "very easy" assist default is superseded (still selectable). Validation targets re-measured for 2 g tires (brake 75→0 ≈ 17 m, cornering 1.5–2.3 g at full lock, ~31 m turn radius at cruise). The soak bot now mirrors the 1.6 g envelope.
+
+## ADR-014 — Zero driving assistance & lateral freedom (120 km/h)
+
+**Date:** 2026-09-23 · **Status:** accepted
+
+**Context.** User: "Why do I always return to the middle? I want to be free on the right and on the left as I want… I want zero assistance in the driving… increase the speed to 120 kilometers per hour."
+
+**Decision.**
+1. **Lane centre-pull deleted.** The lane assist now ONLY aligns the car with the road heading ahead (so bends don't fling you); a lateral offset is preserved exactly — the car stays wherever the player puts it. Guardrails remain the only physical boundary.
+2. **Driver aid defaults to OFF** (was light). Settings schema 3 migrates existing 'light' saves to 'off' once — the player who asked for zero gets zero. Light/full remain selectable in options.
+3. **Cruise cap 120 km/h** (33.3 m/s; Bruto 112). The whole pyramid rescales ×1.5: traffic families 46–89 km/h, event injector speeds and placement, speed-line onset ~70 km/h, validation targets re-measured (brake 120→0 ≈ 39/38/33 m, full-lock turn radius 51–73 m ≈ 2 g).
+
+**Consequences.** This supersedes the "assists always on" clause of ADR-008 and the light default of ADR-013 — driving is now fully manual by default; the grip governor (ADR-013) stays, being the car's character rather than an aid. The M5 "sloppy driver" lane-keep test is replaced by a lateral-freedom test (an offset car keeps its offset).

@@ -171,14 +171,15 @@ export class Car {
       target = clamp(target + 0.55 * this.beta * dMax, -dMax, dMax);
     }
     if (this.laneAssist && this.guide) {
-      // EASY: lane-keep assist — steer toward the road heading ahead plus a
-      // gentle centre-line pull. Full strength with quiet hands (|steer| <
-      // 0.4), faded to 35% when the player is deliberately steering.
+      // ADR-014: NO centre pull — the player is laterally FREE ("wherever I
+      // put the car it stays"). The assist only aligns the car with the road
+      // heading ahead, so bends don't fling you; a parallel offset is
+      // preserved exactly. Full strength with quiet hands (|steer| < 0.4),
+      // faded to 35% while the player steers deliberately.
       this.guide.sample(CAR_PROJ.s + 14 + 0.24 * Math.abs(this.u), CAR_SPINE);
       let dh = CAR_SPINE.heading - this.heading;
       while (dh > Math.PI) dh -= 2 * Math.PI;
       while (dh < -Math.PI) dh += 2 * Math.PI;
-      dh += clamp(-latSigned * 0.045, -0.14, 0.14); // drift back to centre
       const k = 0.7 * (Math.abs(intent.steer) < 0.4 ? 1 : 0.35);
       target = clamp(target + clamp(k * dh, -0.3, 0.3), -dMax * 1.15, dMax * 1.15);
     }

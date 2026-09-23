@@ -175,3 +175,10 @@
 - **Fairness soak:** envelopes re-anchored to 1.6 g braking + speed-proportional margins; 60-min soak back to 0 violations.
 - **Verification:** 226/226 tests (16 new controls/ADR-013 gates); build green; e2e m11/m6 regressions green; relay --serve smoke (game+phone pages, LAN IP); 0 console errors.
 - Docs: ADR-013, PILLs 098–101, README controllers section.
+
+### Session 15 (2026-09-23, M13) — zero assistance, lateral freedom, 120 km/h (ADR-014)
+- Lane centre-pull deleted — lateral position is fully the player's (road-heading alignment only); freedom test replaces the old lane-keep gate.
+- Driver aid defaults OFF; settings schema 3 migrates existing 'light' saves.
+- Cruise cap 120 km/h (Bruto 112); traffic 46–89 km/h, events ×1.5 with farther placement, streaks from ~70 km/h, brake/radius targets re-measured (39/38/33 m; 51–73 m ≈ 2 g).
+- Verification: 226/226 tests; build green; e2e m11 (119 km/h flat plateau, gear 7, coast releases), m12 (phone remote + reverse), m6 all green; 0 console errors.
+- Docs: ADR-014, PILLs 102–104, PLAN v2.0.
