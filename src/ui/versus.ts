@@ -70,7 +70,16 @@ export class VersusPanel {
     this.root.classList.add('hidden');
   }
 
+  /** a dead session (failed dial, closed, left) must not block the next try */
+  private clearDead(): void {
+    if (this.session?.state === 'dead') {
+      this.session = null;
+      this.refresh();
+    }
+  }
+
   private async create(): Promise<void> {
+    this.clearDead();
     if (this.session) return;
     this.setCode('· · · · ·');
     this.setStatus('contacting the matchmaker…');
@@ -84,6 +93,7 @@ export class VersusPanel {
   }
 
   private async join(): Promise<void> {
+    this.clearDead();
     if (this.session) return;
     const code = normalizeCode(this.joinInput.value);
     if (!code) {

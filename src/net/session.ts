@@ -55,6 +55,7 @@ export class VersusSession {
   remoteAgeSec = Infinity;
 
   private link: MatchLink | null = null;
+  private waitHintTimer: ReturnType<typeof setTimeout> | null = null;
   private lastPoseAt = 0;
   private seed = 0;
   private target = vsTargetFromUrl();
@@ -92,8 +93,20 @@ export class VersusSession {
         this.statusText = this.isHost ? 'share your code — waiting for an opponent…' : 'dialing the host…';
         this.onLobby();
         this.onChanged();
+        if (this.isHost) {
+          this.waitHintTimer = setTimeout(() => {
+            if (this.state === 'lobby') {
+              this.statusText = 'still waiting — keep this tab in the foreground; if it stalls, create a new code';
+              this.onChanged();
+            }
+          }, 45000);
+        }
       },
       onPeerConnected: () => {
+        if (this.waitHintTimer !== null) {
+          clearTimeout(this.waitHintTimer);
+          this.waitHintTimer = null;
+        }
         if (this.state !== 'lobby') return; // ignore stray connections mid/post-race
         this.statusText = 'opponent connected';
         if (!this.isHost) this.send({ t: 'hello', name: 'Player 2', carId: this.myCarId });
@@ -247,6 +260,10 @@ export class VersusSession {
   }
 
   leave(): void {
+    if (this.waitHintTimer !== null) {
+      clearTimeout(this.waitHintTimer);
+      this.waitHintTimer = null;
+    }
     const wasTerminal = this.state === 'finished' || this.state === 'dead';
     this.state = 'dead';
     if (!wasTerminal) this.send({ t: 'bye' });

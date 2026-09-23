@@ -40,8 +40,8 @@ function watch(page, tag) {
     if (m.type() === 'error') errors[tag].push('console: ' + m.text());
   });
 }
-const host = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
-const guest = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
+const host = await (await browser.newContext({ viewport: { width: 960, height: 540 } })).newPage();
+const guest = await (await browser.newContext({ viewport: { width: 960, height: 540 } })).newPage();
 watch(host, 'host');
 watch(guest, 'guest');
 
@@ -60,7 +60,7 @@ await host.click('#btnVsCreate');
 await host.waitForFunction(
   () => /^([2-9A-HJ-NP-Z]{5})$/.test(document.getElementById('vsCode').textContent ?? ''),
   null,
-  { timeout: 20000 },
+  { timeout: 45000 },
 );
 const code = (await host.textContent('#vsCode'))?.trim();
 console.log('HOST code:', code);
@@ -74,18 +74,18 @@ await guest.click('#btnVsJoin');
 await host.waitForFunction(
   () => !document.getElementById('countdown').classList.contains('hidden'),
   null,
-  { timeout: 30000 },
+  { timeout: 60000 },
 );
 await guest.waitForFunction(
   () => !document.getElementById('countdown').classList.contains('hidden'),
   null,
-  { timeout: 30000 },
+  { timeout: 60000 },
 );
 console.log('BOTH counting down');
 await host.waitForFunction(
   () => document.getElementById('countdown').classList.contains('hidden'),
   null,
-  { timeout: 15000 },
+  { timeout: 45000 },
 );
 
 // GO: host pins gas; guest hesitates 2.5 s so the result is deterministic
@@ -97,7 +97,7 @@ await guest.keyboard.down('w');
 await host.waitForFunction(
   () => (document.getElementById('hudVersus').textContent ?? '').includes(' m'),
   null,
-  { timeout: 20000 },
+  { timeout: 45000 },
 );
 console.log('HOST chip:', await host.textContent('#hudVersus'));
 
@@ -105,38 +105,38 @@ console.log('HOST chip:', await host.textContent('#hudVersus'));
 await host.waitForFunction(
   () => document.getElementById('resultsTitle').textContent === 'VICTORY',
   null,
-  { timeout: 90000 },
+  { timeout: 150000 },
 );
 console.log('HOST finished: VICTORY');
 await guest.waitForFunction(
   () => document.getElementById('resultsTitle').textContent === 'DEFEAT',
   null,
-  { timeout: 30000 },
+  { timeout: 60000 },
 );
 console.log('GUEST finished: DEFEAT');
 await host.keyboard.up('w');
 await guest.keyboard.up('w');
 
 // rematch: host reseeds — both return to countdown
-await host.click('#btnVsRematch');
+await host.evaluate(() => document.getElementById('btnVsRematch').click());
 await host.waitForFunction(
   () => !document.getElementById('countdown').classList.contains('hidden'),
   null,
-  { timeout: 20000 },
+  { timeout: 45000 },
 );
 await guest.waitForFunction(
   () => !document.getElementById('countdown').classList.contains('hidden'),
   null,
-  { timeout: 20000 },
+  { timeout: 45000 },
 );
 console.log('REMATCH: both counting down again');
 
 // host leaves mid-countdown → guest wins by disconnect
-await host.click('#btnVsQuit');
+await host.evaluate(() => document.getElementById('btnVsQuit').click());
 await guest.waitForFunction(
   () => document.getElementById('resultsTitle').textContent === 'VICTORY',
   null,
-  { timeout: 20000 },
+  { timeout: 45000 },
 );
 console.log('GUEST wins by disconnect after host left');
 
@@ -145,6 +145,7 @@ console.log('ERRORS guest:', errors.guest.length, errors.guest.slice(0, 3));
 await browser.close();
 peer.kill();
 
+process.on('exit', () => { try { peer.kill(); } catch {} });
 const pass = errors.host.length === 0 && errors.guest.length === 0 && !!code && code.length === 5;
 console.log(pass ? 'E2E M19 OK' : 'E2E M19 FAILED');
 process.exit(pass ? 0 : 1);

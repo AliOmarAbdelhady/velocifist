@@ -45,6 +45,7 @@ export class MatchLink {
   private peer: PeerLike | null = null;
   private conn: ConnLike | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private dialTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
 
   private constructor(
@@ -76,13 +77,36 @@ export class MatchLink {
       default: new (a?: unknown, b?: unknown) => PeerLike;
     };
     const Peer = mod.default;
-    const peer = id !== undefined ? new Peer(id, { ...(broker ?? {}) }) : new Peer({ ...(broker ?? {}) });
+    // ICE: STUN alone dies on carrier-grade/symmetric NAT (phone on cellular
+    // vs laptop on WiFi never punch through) — the free OpenRelay TURN is the
+    // relay of last resort so versus works across networks (ADR-018 fix).
+    const opts = {
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:global.stun.twilio.com:3478' },
+          { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+          { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+          { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+        ],
+        iceCandidatePoolSize: 4,
+      },
+      ...(broker ?? {}),
+    };
+    const peer = id !== undefined ? new Peer(id, opts) : new Peer(opts);
     peer.on('open', () => {
       this.cb.onReady();
       if (this.connectTo !== null) {
-        // guest: dial the host's claimed id
+        // guest: dial the host's claimed id; if the DataChannel can't form
+        // (hard NATs, silent ICE death) FAIL LOUDLY after 20 s instead of
+        // hanging at "dialing the host…" forever
         const conn = peer.connect(this.connectTo, { reliable: true });
         this.wireConn(conn);
+        this.dialTimer = setTimeout(() => {
+          if (!this.closed && !(this.conn && this.conn.open)) {
+            this.failOut('could not connect to the opponent — press JOIN again (a fresh code helps; same WiFi works best)');
+          }
+        }, 20000);
       }
     });
     peer.on('connection', (connArg: unknown) => {
@@ -92,31 +116,53 @@ export class MatchLink {
     peer.on('error', (errArg: unknown) => {
       const err = errArg as { type?: string; message?: string };
       const type = err?.type ?? 'unknown';
+      console.warn('[versus] peer error:', type, err?.message ?? '');
       if (type === 'peer-unavailable') {
-        this.cb.onFail('no match with that code right now');
+        this.failOut('no match with that code right now — ask for a fresh code');
         return;
       }
       if (type === 'unavailable-id') {
-        this.cb.onFail('that code is taken — create a new match');
+        this.failOut('that code is taken — create a new match');
         return;
       }
       if (type === 'browser-incompatible') {
-        this.cb.onFail('this browser cannot do WebRTC');
+        this.failOut('this browser cannot do WebRTC');
         return;
       }
       if (type === 'network' || type === 'server-error' || type === 'socket-error' || type === 'socket-closed') {
-        this.cb.onFail('matchmaking server unreachable — try again');
+        this.failOut('matchmaking server unreachable — try again');
         return;
       }
-      if (!this.conn?.open && !this.closed) this.cb.onFail('connection error: ' + type);
+      if (!this.conn?.open && !this.closed) this.failOut('connection error: ' + type);
     });
     return peer;
+  }
+
+  /** terminal, user-visible failure: kill the link and say why */
+  private failOut(reason: string): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.stopPing();
+    if (this.dialTimer !== null) {
+      clearTimeout(this.dialTimer);
+      this.dialTimer = null;
+    }
+    try {
+      this.peer?.destroy();
+    } catch {
+      /* already gone */
+    }
+    this.cb.onFail(reason);
   }
 
   private wireConn(conn: ConnLike): void {
     if (this.conn) return; // one opponent per match
     this.conn = conn;
     conn.on('open', () => {
+      if (this.dialTimer !== null) {
+        clearTimeout(this.dialTimer);
+        this.dialTimer = null;
+      }
       this.cb.onPeerConnected();
       this.pingTimer = setInterval(() => {
         this.send({ t: 'ping', ts: performance.now() });
@@ -156,6 +202,10 @@ export class MatchLink {
     if (this.closed) return;
     this.closed = true;
     this.stopPing();
+    if (this.dialTimer !== null) {
+      clearTimeout(this.dialTimer);
+      this.dialTimer = null;
+    }
     try {
       this.send({ t: 'bye' });
     } catch {

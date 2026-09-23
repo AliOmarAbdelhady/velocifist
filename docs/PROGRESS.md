@@ -212,3 +212,9 @@
 - Race model: identical-seed worlds, 15 Hz road-frame pose stream (rebase-proof), translucent ghost opponent (no collision), live gap/position/ping HUD chip, first to 5 km wins, wreck = instant loss, disconnect = opponent wins; VICTORY/DEFEAT results with margin, host-authoritative rematch (reseed), leave (✕ during race, button on results).
 - Verification: 12 new unit tests (codes/protocol/state machine) — 250/253 total; build green; **e2e-m19: two real browser pages race a full match against a local PeerServer — code matchmake, synced countdowns, chip `1st · +2 m · 535 ms`, VICTORY/DEFEAT, rematch, leave→disconnect win, 0 console errors**.
 - Docs: ADR-018, PILLs 116–119, README versus section.
+
+### Session 20 (2026-09-23, M19 hotfix) — versus would not connect between networks
+- Field report: both sides reached the matchmaker but the DataChannel never formed (guest hung at "dialing the host…"). Root cause: STUN-only ICE cannot traverse CGNAT/symmetric NAT pairs (phone cellular vs laptop WiFi).
+- Fixes: TURN relays added (free OpenRelay + Google/Twilio STUN, iceCandidatePoolSize 4); 20 s dial timeout that fails with an actionable message instead of hanging; every peer error now fails loudly (failOut kills the link + tells the user) and logs `[versus] peer error: <type>` to the console; create/join retry works after a dead session (was silently blocked); host gets a "still waiting — keep this tab in the foreground" hint after 45 s; results overlays scroll on short screens.
+- Verification: 250/253 tests; build green; e2e-m19 full match green again (code → countdown → race → VICTORY/DEFEAT → rematch → disconnect win, 0 console errors) with hardened timeouts + cleanup.
+- Docs: PILLs 120–121.
