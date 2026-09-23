@@ -159,3 +159,16 @@ M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determi
 3. **Cruise cap 120 km/h** (33.3 m/s; Bruto 112). The whole pyramid rescales ×1.5: traffic families 46–89 km/h, event injector speeds and placement, speed-line onset ~70 km/h, validation targets re-measured (brake 120→0 ≈ 39/38/33 m, full-lock turn radius 51–73 m ≈ 2 g).
 
 **Consequences.** This supersedes the "assists always on" clause of ADR-008 and the light default of ADR-013 — driving is now fully manual by default; the grip governor (ADR-013) stays, being the car's character rather than an aid. The M5 "sloppy driver" lane-keep test is replaced by a lateral-freedom test (an offset car keeps its offset).
+
+## ADR-015 — 150 km/h, rival traffic, escalating density
+
+**Date:** 2026-09-23 · **Status:** accepted
+
+**Context.** User: speed to 150 km/h; "the cars in front of me are trying to prevent me from passing, and I'm trying to pass"; traffic should increase every while, again and again.
+
+**Decision.**
+1. **Cruise cap 150 km/h** (41.7 m/s; Bruto 140) — pyramid rescaled ×1.25: traffic families 58–111 km/h, events ×1.25 placed 340–460 m ahead, streaks from ~85 km/h, targets re-measured (brake 150→0 ≈ 61/60/51 m).
+2. **Rival AI:** ~30% of same-direction cars (families 0–4, not buses/trucks) are rivals. A rival ahead reads the player's lateral DRIFT (projected lane), and when the player pulls toward an adjacent lane it signals (1 s readable blinker) and cuts across to block, subject to: lane-gap checks, max 2 concurrent rival cuts (no coordinated walling), 5–9 s cooldown, oncoming/construction exclusion. Rivals also pace up (~+15% over family cruise) while the player shadows them, and relax when the pressure leaves. Scripted event cars are never rivals.
+3. **Escalating density (replaces ADR-008's flat-after-4-min curve):** warm-up 8→10 veh/km/lane over 4 minutes, then **+1 per minute forever**, capped at 24 by the agent pool. The longer the run, the denser the weave.
+
+**Consequences.** Passing becomes a duel: you fake left, they blink and close the door, you cut back right. The fairness soak runs WITH rivals armed and still probes zero no-escape states across 60 sim-minutes — the block is one lane, one rival, with a warning blinker, so an escape always exists. Kill pacing remains retired; difficulty now comes from density and rivals, not from unfair walls.

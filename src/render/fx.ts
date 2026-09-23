@@ -333,8 +333,8 @@ export class FXSystem {
     // speed lines: recycle toward the camera ∝ speed
     const v = Math.abs(speed);
     // visible from ~100 km/h, strong by 250 (visual QA: old curve was sub-perceptual)
-    // ADR-014: visible from ~70 km/h, full by the 120 km/h cruise cap
-    const op = this.streaksOn ? Math.min(0.6, Math.max(0, (v - 19.5) / 14.5) ** 2 * 0.85) : 0;
+    // ADR-015: visible from ~85 km/h, full by the 150 km/h cruise cap
+    const op = this.streaksOn ? Math.min(0.6, Math.max(0, (v - 23.6) / 18.5) ** 2 * 0.85) : 0;
     this.streaks.visible = op > 0.02;
     if (this.streaks.visible) {
       this.streakMat.opacity = op;

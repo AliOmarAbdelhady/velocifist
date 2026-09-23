@@ -5,10 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { DifficultyDirector, densityAt, eventPeriodSec } from '../src/sim/director';
 
 describe('relaxed formulas (ADR-008 easy-first)', () => {
-  it('density ramps gently 8 → 10 veh/km/lane over 4 minutes, then flat', () => {
+  it('density warms up over 4 min, then KEEPS RISING +1/min (ADR-015), capped', () => {
     expect(densityAt(0)).toBeCloseTo(8, 6);
     expect(densityAt(240)).toBeCloseTo(10, 6);
-    expect(densityAt(600)).toBeCloseTo(10, 6); // clamped — no death pacing
+    expect(densityAt(600)).toBeCloseTo(16, 6); // +1 per minute after warm-up
+    expect(densityAt(60 * 60)).toBeCloseTo(24, 6); // ceiling (agent pool)
     expect(densityAt(120)).toBeGreaterThan(densityAt(60));
   });
 

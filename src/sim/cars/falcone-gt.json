@@ -23,7 +23,7 @@
   "brakeSplitFront": 0.62,
   "roadHalfWidth": 11,
   "healthMax": 110,
-  "targetBrake": 38.9,
+  "targetBrake": 60.8,
   "bodyDims": [
     2.0,
     1.1,
@@ -31,6 +31,6 @@
   ],
   "color": 14168606,
   "downforce": 0.12,
-  "vCruise": 33.3,
+  "vCruise": 41.7,
   "targetCruise": 2.48
 }

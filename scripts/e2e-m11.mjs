@@ -75,7 +75,7 @@ await browser.close();
 // on a populated road the assist brakes behind slower traffic and full gas
 // climbs back — dips are CORRECT; the cap is what must hold
 const pass =
-  early.cars >= 5 && max >= 105 && max <= 121 && tailMax <= 121 && tailMax >= 100 &&
+  early.cars >= 5 && max >= 140 && max <= 151 && tailMax <= 151 && tailMax >= 135 &&
   coast <= tailMin + 1 && thr0 && errors.length === 0;
 console.log(pass ? 'E2E M11 OK' : 'E2E M11 FAILED');
 process.exit(pass ? 0 : 1);

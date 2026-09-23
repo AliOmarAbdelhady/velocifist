@@ -182,3 +182,10 @@
 - Cruise cap 120 km/h (Bruto 112); traffic 46–89 km/h, events ×1.5 with farther placement, streaks from ~70 km/h, brake/radius targets re-measured (39/38/33 m; 51–73 m ≈ 2 g).
 - Verification: 226/226 tests; build green; e2e m11 (119 km/h flat plateau, gear 7, coast releases), m12 (phone remote + reverse), m6 all green; 0 console errors.
 - Docs: ADR-014, PILLs 102–104, PLAN v2.0.
+
+### Session 16 (2026-09-23, M14) — 150 km/h, rival traffic, escalating density (ADR-015)
+- Cap 150/150/140 km/h; traffic 58–111 km/h; events ×1.25 placed 340–460 m; streaks from ~85 km/h; brake targets 61/60/51 m.
+- Rival AI: drift-reading block cuts (1 s blinker warning, lane-gap checks, ≤2 concurrent, cooldown), defensive pacing under shadowing; scripted event cars excluded. E2E visibly shows the effect (plateau dips to 143 while passing).
+- Density escalates: 8→10 over 4 min, then +1/min forever, ceiling 24 (agent pool).
+- Verification: 229/229 tests (3 rival gates + escalation curve); soak 0 violations WITH rivals; build green; e2e m6/m11/m12 green; 0 console errors.
+- Docs: ADR-015, PILLs 105–107, PLAN v2.1.

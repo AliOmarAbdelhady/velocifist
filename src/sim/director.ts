@@ -11,12 +11,14 @@ const clamp = (v: number, lo: number, hi: number): number =>
   v < lo ? lo : v > hi ? hi : v;
 
 /**
- * EASY-FIRST density (ADR-008, ADR-012): the ramp is a gentle variety curve,
- * NOT a survival squeeze — base 8 veh/km/lane (the cruise regime runs slower,
- * so the road runs fuller) +2 over 4 minutes, then flat. No death pacing.
+ * ESCALATING density (ADR-015, user directive): base 8 veh/km/lane with a
+ * gentle 4-minute warm-up (+2), then the road keeps FILLING — +1 per minute,
+ * capped at 24 (the agent-pool ceiling for the spawn window). The longer you
+ * drive, the denser the weave.
  */
 export function densityAt(tSec: number, base = 8): number {
-  return base + 2 * Math.pow(Math.min(tSec / 240, 1), 1.25);
+  const warm = base + 2 * Math.pow(Math.min(tSec / 240, 1), 1.25);
+  return Math.min(24, warm + Math.max(0, (tSec - 240) / 60));
 }
 
 /** Event period — 40 s early → 24 s late (M7 injectors consume it). */

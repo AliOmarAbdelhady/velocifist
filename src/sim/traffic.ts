@@ -60,6 +60,8 @@ export class TrafficSystem {
   /** player road-frame pose, refreshed each update() (tests + HUD read these) */
   playerS = 0;
   playerLat = 0;
+  /** player lateral velocity, m/s (rival intent detection, ADR-015) */
+  playerLatVel = 0;
 
   private cfg: TrafficConfig;
   private readonly road: RoadSystem;
@@ -125,6 +127,9 @@ export class TrafficSystem {
     slot.desiredSpeed = spec.desiredSpeed ?? spec.speed;
     slot.signal = 0;
     slot.signalTimer = 0;
+    slot.rival = false; // scripted events own their behavior
+    slot.rivalCd = 0;
+    slot.cruiseSpeed = slot.speed;
     slot.laneTo = -1;
     if (spec.signal) {
       slot.signal = spec.signal;
@@ -195,6 +200,8 @@ export class TrafficSystem {
 
     this.road.project(car.x, car.z, this.proj);
     this.playerS = this.proj.s;
+    // ADR-015: rivals read the player's lateral DRIFT to anticipate the pass
+    this.playerLatVel = (this.proj.lat - this.playerLat) / Math.max(dt, 1e-4);
     this.playerLat = this.proj.lat;
     this.puCache = car.u;
 
@@ -313,6 +320,9 @@ export class TrafficSystem {
     slot.state = 'CRUISE';
     slot.signal = 0;
     slot.signalTimer = 0;
+    slot.rival = dir > 0 && f <= 4 && this.rng() < 0.3; // ADR-015
+    slot.rivalCd = this.rng() * 2;
+    slot.cruiseSpeed = slot.speed;
     slot.changeTimer = 0;
     slot.kvx = 0;
     slot.kvz = 0;
@@ -345,6 +355,7 @@ export class TrafficSystem {
       speed: 0, desiredSpeed: 0, state: 'CRUISE', lane: 0, laneFrom: 0, laneTo: -1,
       lanePhase: 0, signal: 0, signalTimer: 0, changeTimer: 0,
       kvx: 0, kvz: 0, kspin: 0, knockedTimer: 0, chainDepth: 0,
+      rival: false, rivalCd: 0, cruiseSpeed: 0,
       nmTracked: false, nmMinClearance: 99, nmWasAhead: false,
       passCounted: false, hadContact: false,
     };
@@ -396,6 +407,43 @@ export class TrafficSystem {
           a.laneTo = target;
         }
       }
+      // ---- ADR-015 rival brain: this car defends its position ----
+      if (a.rival && a.dir > 0) {
+        a.rivalCd -= dt;
+        const dsp = a.s - this.playerS;
+        const onc2 = this.road.oncomingAt(a.s);
+        const inBand = dsp > 8 && dsp < 90 && a.lane >= onc2;
+        if (inBand) {
+          // where is the player HEADING? project the lateral drift forward
+          const projLane = this.playerLane(this.playerLat + this.playerLatVel * 0.8);
+          if (
+            projLane !== a.lane &&
+            Math.abs(projLane - a.lane) === 1 &&
+            projLane >= onc2 &&
+            projLane < this.cfg.laneCount &&
+            a.rivalCd <= 0 &&
+            !this.road.laneBlocked(a.s + 60, projLane) &&
+            this.rivalCutsActive() < 2 &&
+            this.laneGapFree(a, projLane)
+          ) {
+            // blinker first — the cut is readable and dodgeable (1 s warning)
+            a.signal = (projLane - a.lane) as -1 | 1;
+            a.signalTimer = 0;
+            a.laneTo = projLane;
+            a.rivalCd = 5 + this.rng() * 4;
+          }
+          // defensive pacing: don't roll over when the player sits behind
+          if (dsp < 60 && this.playerLane(this.playerLat) === a.lane) {
+            a.desiredSpeed = Math.min(
+              FAMILIES[a.family].vMax * 1.15,
+              a.desiredSpeed + 2 * dt,
+            );
+          }
+        } else if (a.desiredSpeed > a.cruiseSpeed) {
+          a.desiredSpeed = Math.max(a.cruiseSpeed, a.desiredSpeed - dt);
+        }
+      }
+
       // signalling phase before the move
       if (a.signal !== 0) {
         a.signalTimer += dt;
@@ -446,6 +494,25 @@ export class TrafficSystem {
     this.mapToWorld(a);
     a.mdx = a.x - wx;
     a.mdz = a.z - wz;
+  }
+
+  /** Rivals currently mid-block (signal on) — caps coordinated walling. */
+  private rivalCutsActive(): number {
+    let n = 0;
+    for (const o of this.agents) if (o.active && o.rival && o.signal !== 0) n++;
+    return n;
+  }
+
+  /** Same-direction lane gap check for a rival's block cut. */
+  private laneGapFree(a: TrafficAgent, lane: number): boolean {
+    const cx = this.laneCenter(lane);
+    for (const o of this.agents) {
+      if (!o.active || o === a || o.dir !== a.dir) continue;
+      const ol = this.laneCenter(o.laneTo >= 0 && o.state === 'CHANGE_LANE' ? o.laneTo : o.lane);
+      if (ol !== cx) continue;
+      if (Math.abs(o.s - a.s) < 26 + FAMILIES[o.family].halfL) return false;
+    }
+    return true;
   }
 
   private findLeader(a: TrafficAgent): TrafficAgent | null {

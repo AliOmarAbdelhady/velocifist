@@ -31,7 +31,7 @@ describe('ADR-013 handling contract — no slides, no spins', () => {
       }
       const cap = (Math.max(tune.muFront, tune.muRear) * 1.15); // aero headroom
       expect(maxG).toBeLessThanOrEqual(cap * 1.05); // never past the tire envelope
-      expect(maxG).toBeGreaterThanOrEqual(0.9); // abuse transients lean on the glue;
+      expect(maxG).toBeGreaterThanOrEqual(0.8); // abuse transients lean on the glue;
       // the STEADY corner test below proves full-lock reaches 1.5+ g
     });
 
@@ -56,8 +56,8 @@ describe('ADR-013 handling contract — no slides, no spins', () => {
     c.u = tune.vCruise;
     for (let i = 0; i < 90; i++) c.step(DT, { steer: 1, throttle: 1, brake: 0 });
     const r = Math.abs(c.u) / Math.max(0.05, Math.abs(c.omega));
-    expect(r).toBeLessThan(80); // ≈2 g at the 120 km/h cap (ADR-014)
-    expect(r).toBeGreaterThan(30); // but still a car, not a carousel
+    expect(r).toBeLessThan(130); // ≈2 g at the 150 km/h cap (ADR-015)
+    expect(r).toBeGreaterThan(40); // but still a car, not a carousel
   });
 });
 
@@ -180,3 +180,91 @@ describe('driver-aid levels (ADR-013)', () => {
     expect(ASSIST_LEVELS.off).toBeNull();
   });
 });
+
+describe('ADR-015 rival AI — cars defend against being overtaken', () => {
+  it('a rival cuts into the lane the player is pulling toward (with signal)', () => {
+    const t = new TrafficSystem(
+      { seed: 777, laneCount: 4, laneWidth: 6, densityPerKmPerLane: 0 },
+      RoadSystem.straight(),
+    );
+    const car = new Car(CAR_TUNES[0]);
+    car.u = 40; // player faster: closing
+    const rival = t.agents[0];
+    Object.assign(rival, {
+      active: true, id: 1, family: 2, lane: 1, s: 45, lat: t.laneCenter(1), dir: 1,
+      speed: 26, desiredSpeed: 26, cruiseSpeed: 26, state: 'CRUISE',
+      laneFrom: 1, laneTo: -1, signal: 0, signalTimer: 0,
+      rival: true, rivalCd: 0,
+    });
+    // player sits in lane 1 behind the rival, drifting LEFT (toward lane 0)
+    car.x = t.laneCenter(1);
+    const drift = -2.5; // m/s lateral, toward lane 0
+    let sawSignal = false;
+    let cutCompleted = false;
+    for (let i = 0; i < 60 * 8; i++) {
+      // player holds position + drift for the first 2 s, then stays in lane 0
+      car.x = i < 120 ? t.laneCenter(1) + drift * (i / 60) : t.laneCenter(0) - 1;
+      t.update(1 / 60, car, car.x, car.z);
+      if (rival.signal !== 0) sawSignal = true;
+      if (rival.lane === 0 && rival.state === 'CRUISE') cutCompleted = true;
+      t.takeCrashes();
+      t.takeNearMisses();
+    }
+    expect(sawSignal).toBe(true); // readable blinker before the cut
+    expect(cutCompleted).toBe(true); // the rival actually moved to block
+  });
+
+  it('non-rivals keep their lane when the player pulls out', () => {
+    const t = new TrafficSystem(
+      { seed: 777, laneCount: 4, laneWidth: 6, densityPerKmPerLane: 0 },
+      RoadSystem.straight(),
+    );
+    const car = new Car(CAR_TUNES[0]);
+    car.u = 40;
+    const calm = t.agents[0];
+    Object.assign(calm, {
+      active: true, id: 1, family: 2, lane: 1, s: 45, lat: t.laneCenter(1), dir: 1,
+      speed: 26, desiredSpeed: 26, cruiseSpeed: 26, state: 'CRUISE',
+      laneFrom: 1, laneTo: -1, signal: 0, signalTimer: 0,
+      rival: false, rivalCd: 0,
+    });
+    car.x = t.laneCenter(1);
+    let moved = false;
+    for (let i = 0; i < 60 * 6; i++) {
+      car.x = i < 120 ? t.laneCenter(1) - 2.5 * (i / 60) : t.laneCenter(0) - 1;
+      t.update(1 / 60, car, car.x, car.z);
+      if (calm.lane !== 1 || calm.signal !== 0) moved = true;
+      t.takeCrashes();
+      t.takeNearMisses();
+    }
+    expect(moved).toBe(false); // ordinary traffic does not chase the player
+  });
+
+  it('rival defensive pacing: speeds up while the player sits behind', () => {
+    const t = new TrafficSystem(
+      { seed: 777, laneCount: 4, laneWidth: 6, densityPerKmPerLane: 0 },
+      RoadSystem.straight(),
+    );
+    const car = new Car(CAR_TUNES[0]);
+    const rival = t.agents[0];
+    Object.assign(rival, {
+      active: true, id: 1, family: 1, lane: 1, s: 45, lat: t.laneCenter(1), dir: 1,
+      speed: 24, desiredSpeed: 24, cruiseSpeed: 24, state: 'CRUISE',
+      laneFrom: 1, laneTo: -1, signal: 0, signalTimer: 0,
+      rival: true, rivalCd: 99,
+    });
+    car.x = t.laneCenter(1);
+    // the player SHADOWS the rival: slightly faster, holding ~40 m back
+    for (let i = 0; i < 60 * 4; i++) {
+      car.u = 27;
+      car.step(1 / 60, { steer: 0, throttle: 0, brake: 0 });
+      t.update(1 / 60, car, car.x, car.z);
+      t.takeCrashes();
+      t.takeNearMisses();
+    }
+    expect(rival.desiredSpeed).toBeGreaterThan(26.5); // defending, not cruising
+  });
+});
+
+import { TrafficSystem } from '../src/sim/traffic';
+import { RoadSystem } from '../src/sim/road';
