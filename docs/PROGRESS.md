@@ -166,3 +166,12 @@
 - **Fairness fixes the regime exposed:** direction-aware beside-blocking + matchable-neighbour rule in `hasEscape`; soak bot keeps a following envelope.
 - **Verification:** 210/210 tests (validation targets re-measured for the regime: 0→75 km/h, cruise→0 braking, near-cruise slalom); E2E m6/m7/m8/m9 all green under the new speeds + new `e2e-m11.mjs` (traffic at t≈1 s, plateau, coast decay), 0 console errors; build green.
 - Docs: ADR-012, PILLs 095–097, PLAN v1.8.
+
+### Session 14 (2026-09-23, M12) — real controllers & handling contract (ADR-013)
+- **Phone remote:** `scripts/remote-relay.mjs` (LAN WebSocket relay; `--serve` hosts game + phone page). Phone gets a draggable steering wheel, hold pedals, crash vibration, latency display; input decays if the phone goes silent. E2E drives the real game through the real relay (67 km/h, steering, reverse gear R).
+- **PS4 DualShock 4:** standard Gamepad API mapping (cubic stick, deadzone, analog triggers), hot-plug, merges with keyboard/phone (last-touched wins).
+- **Handling:** grip governor — steering range speed-scaled to the ~2 g tire envelope; oversteer/understeer/spins impossible by construction (abuse tests: |β| < 7°, yaw bounded, g capped yet 1.5+ g usable, ~31 m turn radius at cruise). steerFadeSpeed retired.
+- **Reverse** (brake at standstill, ~20 km/h cap, R on the HUD; brake-force cancellation bug caught by tests). **Driver aid** light/full/off (light default). **Camera** constant close chase, 55°+9° FOV.
+- **Fairness soak:** envelopes re-anchored to 1.6 g braking + speed-proportional margins; 60-min soak back to 0 violations.
+- **Verification:** 226/226 tests (16 new controls/ADR-013 gates); build green; e2e m11/m6 regressions green; relay --serve smoke (game+phone pages, LAN IP); 0 console errors.
+- Docs: ADR-013, PILLs 098–101, README controllers section.

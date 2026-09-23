@@ -60,35 +60,37 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
     const from = tune.vCruise - 1;
     let zStart = 0;
     let started = false;
-    let stopped = -1;
+    let dist = -1;
     run(
       c,
       () => BRAKE,
       15,
-      (cc, t) => {
+      (cc) => {
         if (!started && cc.u <= from) {
           started = true;
           zStart = cc.z;
         }
-        if (started && stopped < 0 && cc.u <= 0.05) stopped = t;
+        // capture at the stop INSTANT — reverse gear (ADR-013) keeps driving
+        // the car backward afterwards and would corrupt a final-position read
+        if (started && dist < 0 && cc.u <= 0.05) dist = zStart - cc.z;
       },
     );
     expect(started).toBe(true);
-    expect(stopped).toBeGreaterThan(0);
-    const dist = zStart - c.z; // car travels toward −z
+    expect(dist).toBeGreaterThan(0);
     expect(Math.abs(dist - tune.targetBrake)).toBeLessThanOrEqual(tune.targetBrake * 0.15);
   });
 
-  it('holds a steady corner above 1.0 g lateral (wide pad, coasting)', () => {
+  it('corners on rails at ~2 g (ADR-013 grip governor, full lock, wide pad)', () => {
     const c = new Car(wideRoad(tune));
     expect(accelTo(c, tune.vCruise - 0.7)).toBe(true);
     run(c, () => IDLE, 0.5);
     let maxG = 0;
-    run(c, () => ({ steer: 0.5, throttle: 0, brake: 0 }), 1.5, (cc) => {
-      maxG = Math.max(maxG, cc.ayLast / 9.81);
+    run(c, () => ({ steer: 1, throttle: 0, brake: 0 }), 1.5, (cc) => {
+      maxG = Math.max(maxG, Math.abs(cc.ayLast) / 9.81);
     });
-    expect(maxG).toBeGreaterThanOrEqual(1.0);
-    expect(maxG).toBeLessThanOrEqual(1.8); // and not glue-tires either
+    // supercar glue: well past road-car grip, and CAPPED by the governor
+    expect(maxG).toBeGreaterThanOrEqual(1.5);
+    expect(maxG).toBeLessThanOrEqual(2.3);
   });
 
   it('step-steer yaw response settles without twitch (wide pad, overshoot < 1.4)', () => {

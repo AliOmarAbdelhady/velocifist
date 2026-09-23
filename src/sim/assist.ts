@@ -36,6 +36,27 @@ export const DEFAULT_ASSIST: AssistParams = {
   minSpeed: 8,
 };
 
+export type AssistLevel = 'light' | 'full' | 'off';
+
+/**
+ * ADR-013 driver-aid levels. The user found the M7 default too intrusive —
+ * LIGHT is the new default: a late, gentle safety net that only really acts
+ * when a collision is genuinely imminent. FULL keeps the original M7 feel.
+ */
+export const ASSIST_LEVELS: Record<AssistLevel, AssistParams | null> = {
+  light: {
+    ttcBrake: 1.15, // fires only when it truly matters
+    ttcFull: 0.45,
+    maxBrake: 0.35, // coax, never grab
+    latMargin: 0.7,
+    scanAheadM: 90,
+    steerReliefThreshold: 0.22,
+    minSpeed: 8,
+  },
+  full: DEFAULT_ASSIST,
+  off: null,
+};
+
 export interface AssistView {
   /** 0..1 brake the assist wants to apply this step */
   brake: number;

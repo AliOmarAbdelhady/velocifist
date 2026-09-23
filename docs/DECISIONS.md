@@ -130,3 +130,19 @@ M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determi
 3. **Traffic from frame one:** `TrafficSystem.warmup()` pre-populates the corridor around the player through the normal fairness-checked spawn rules (near-min 40 m); steady spawn window tightened to 110–300 m; base density 6.5→8 veh/km/lane.
 
 **Consequences.** Closing speeds are small, which exposed two real `hasEscape` semantics bugs: a barely-slower neighbour (≤1.5 m/s) is matchable within a second and must not count as a wall, and an agent BEHIND that the player outruns can never block a lane — both fixed (direction-aware). The soak bot now keeps a survivable following envelope (the invariant's own premise: an escape exists for a player who keeps one). Validation targets are cruise-regime (`targetCruise` 0→75 km/h s, `targetBrake` cruise→0 m, slalom near cruise). Old saves unaffected (no settings change).
+
+## ADR-013 — Real controllers & the handling contract
+
+**Date:** 2026-09-23 · **Status:** accepted
+
+**Context.** User feedback after the cruise pass: the AR camera isn't the preferred way to play "for real" — a phone should be a physical remote, and a PS4 pad should work; the auto-brake assistance is too strong; the car must NEVER oversteer, understeer, or rotate around itself ("super super car… sticking to the ground, very fast in maneuvering"); reverse is missing; and the chase camera pulls too far away under acceleration.
+
+**Decision.**
+1. **Phone remote:** a zero-dependency-for-the-phone local relay (`scripts/remote-relay.mjs`, `--serve` also hosts the game). Phone page = drag steering wheel + hold pedals + crash vibration over LAN WebSocket. Input decays to zero if the phone goes quiet — a controller can never stick on. All manual sources (keyboard, pad, phone) merge by most-recent activity; hands still arbitrate against the merged manual intent.
+2. **PS4 pad:** standard Gamepad API mapping (deadzone 0.12, cubic stick, analog triggers preferred, button fallback), hot-plug.
+3. **Handling contract — grip governor:** steering range is speed-scaled so lateral demand (v²·tanδ/L) never exceeds the tire envelope (~2 g supercar-glue tires, grip-circle aware). Slides/oversteer/understeer are impossible by construction, not damped after the fact. Fairness soak envelopes re-anchored to 1.6 g braking with speed-proportional reaction margins.
+4. **Reverse:** brake held at standstill latches reverse (capped ~20 km/h); brake input becomes the reverse throttle (service brakes would cancel it); throttle always recovers forward. Gear 0 renders as R.
+5. **Driver aid levels:** light (new default — fires ≤1.15 s TTC, caps at 0.35) / full (M7 feel) / off. User-selectable in options.
+6. **Camera:** constant chase mount (6.0 m back, no speed pull-back), near-constant FOV (55°+9°) — the car stays the same apparent size at every speed.
+
+**Consequences.** The M7 "very easy" assist default is superseded (still selectable). Validation targets re-measured for 2 g tires (brake 75→0 ≈ 17 m, cornering 1.5–2.3 g at full lock, ~31 m turn radius at cruise). The soak bot now mirrors the 1.6 g envelope.

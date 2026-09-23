@@ -31,6 +31,8 @@ import { TelemetryRecorder, type RunTelemetry } from './core/telemetry';
 import { forwardAssist, applyAssist, type AssistView } from './sim/assist';
 import { resolveReducedMotion, deriveComfort, prefersReducedMotion } from './core/motion';
 import { OptionsPanel } from './ui/options';
+import { GamepadInput, RemoteInput, ManualMerge } from './input/devices';
+import { ASSIST_LEVELS, type AssistParams, type AssistLevel } from './sim/assist';
 import type { TrackerLike } from './render/pip';
 
 const overlay = document.getElementById('overlay')!;
@@ -55,6 +57,25 @@ let demoHands: DemoHands | null = null;
 // Procedural audio (M6): created once, resumed on the first user gesture.
 const audio = GameAudio.create();
 audio?.setVolume(persist.settings.volume);
+
+// Physical controllers (M12/ADR-013): PS4 gamepad + phone remote, merged
+// with the keyboard into one manual intent (most-recent activity wins).
+const gamepad = new GamepadInput();
+const remote = new RemoteInput();
+const manual = new ManualMerge();
+
+function connectRemote(url: string): void {
+  const clean = url.replace(/^http/, 'ws').replace(/\/$/, '');
+  remote.connect(clean.includes('://') ? clean : `ws://${clean}`);
+}
+// relay-hosted game (scripts/remote-relay.mjs --serve) auto-connects; the
+// ?relay=host:port param does it for games served elsewhere
+if ((window as { __VFC_RELAY?: boolean }).__VFC_RELAY) {
+  connectRemote(`ws://${location.host}`);
+} else {
+  const rp = new URLSearchParams(location.search).get('relay');
+  if (rp) connectRemote(rp);
+}
 
 // ------------------------------------------------------- M9 settings plumbing
 
@@ -101,8 +122,12 @@ const options = new OptionsPanel(persist, {
       changed === 'reducedMotion'
     )
       currentGame?.scene.setComfort(comfortFromSettings());
+    if (changed === '' || changed === 'driverAid')
+      currentGame?.setAssistLevel(persist.settings.driverAid);
   },
   onRecalibrate: () => void recalibrateHands(),
+  connectRemote: (url) => connectRemote(url),
+  remoteStatus: () => ({ status: remote.status, latencyMs: remote.latencyMs }),
   getTracker: () => getTrackerFn?.() ?? null,
   audioLatencyMs: () => audio?.latencyMs ?? null,
   setVolume: (v) => audio?.setVolume(v),
@@ -198,6 +223,11 @@ class Game {
     private readonly getPip: () => PipRenderer | null,
     tune: CarTune,
     note?: string,
+    private readonly devices: {
+      gamepad: GamepadInput;
+      remote: RemoteInput;
+      manual: ManualMerge;
+    } = { gamepad, remote, manual },
   ) {
     this.theme = pinnedTheme ?? nextTheme;
     if (!pinnedTheme) {
@@ -240,6 +270,7 @@ class Game {
     });
     this.scene.applyQuality(this.quality.preset);
     this.scene.setComfort(comfortFromSettings());
+    this.setAssistLevel(persist.settings.driverAid);
     audio?.retune(tune);
     audio?.setRunning(true);
     this.scene.setDamageState('PRISTINE');
@@ -261,14 +292,29 @@ class Game {
     this.paused = on;
   }
 
+  /** ADR-013: driver-aid level (light default / full / off) */
+  setAssistLevel(level: AssistLevel): void {
+    this.assistParams = ASSIST_LEVELS[level] ?? ASSIST_LEVELS.light;
+  }
+  private assistParams: AssistParams | null = ASSIST_LEVELS.light;
+
   private step(dt: number): void {
     if (this.paused) return;
     this.keyboard.update(dt);
+    this.devices.gamepad.update();
+    this.devices.remote.update();
     const t = performance.now() / 1000;
     const tracker = this.getTracker();
     const handIntent = tracker ? tracker.solver.intent : null;
     const handConf = tracker ? tracker.solver.state.confidence : 0;
-    this.arbiter.update(handIntent, handConf, this.keyboard.intent, t);
+    // keyboard + PS4 pad + phone remote → one manual intent
+    const manualIntent = this.devices.manual.update(
+      this.keyboard.intent,
+      this.devices.gamepad.intent,
+      this.devices.remote.intent,
+      t,
+    );
+    this.arbiter.update(handIntent, handConf, manualIntent, t);
 
     this.px = this.car.x;
     this.pz = this.car.z;
@@ -303,15 +349,18 @@ class Game {
     // EASY (M7): forward-collision mitigation coaxes the brakes when a
     // closing agent is in the player's path — never steers, never slams
     this.playerBrakePreAssist = intent.brake;
-    if (!wrecked) {
+    if (!wrecked && this.assistParams) {
       applyAssist(
         intent,
         forwardAssist(
           this.car, intent, this.traffic.agents,
           this.traffic.playerS, this.traffic.playerLat,
-          undefined, this.assistView,
+          this.assistParams, this.assistView,
         ),
       );
+    } else {
+      this.assistView.brake = 0;
+      this.assistView.ttc = Infinity;
     }
 
     this.car.step(dt, intent);
@@ -332,6 +381,7 @@ class Game {
     for (const c of crashes) this.director.registerCrash();
     for (const c of crashes) {
       audio?.crash(c.impulse);
+      this.devices.remote.sendRumble(); // phone buzzes on impact
       this.scene.fx.burstSparks(c.x, 0.55, c.z, c.impulse);
     }
     for (const nm of nearMisses) {
@@ -434,8 +484,8 @@ class Game {
       latG: this.car.ayLast / 9.81,
       camMode: CAM_MODES[this.scene.rig.mode],
       input: tracker
-        ? `${this.arbiter.source} ${st ? st.status : ''} ${tracker.info.latencyMs.toFixed(0)}ms ${tracker.info.delegate} · assist ${this.assistView.brake.toFixed(2)} · t${this.car.throttleIn.toFixed(2)} b${this.car.brakeIn.toFixed(2)}`
-        : `${this.arbiter.source} · assist ${this.assistView.brake.toFixed(2)} · t${this.car.throttleIn.toFixed(2)} b${this.car.brakeIn.toFixed(2)}`,
+        ? `${this.arbiter.source}${this.devices.manual.source ? `(${this.devices.manual.source})` : ''}${this.devices.remote.status === 'open' ? ` · phone ${this.devices.remote.latencyMs.toFixed(0)}ms` : ''}${this.devices.gamepad.connected ? ' · pad' : ''} ${st ? st.status : ''} ${tracker.info.latencyMs.toFixed(0)}ms ${tracker.info.delegate} · aid ${this.assistView.brake.toFixed(2)} · t${this.car.throttleIn.toFixed(2)} b${this.car.brakeIn.toFixed(2)}`
+        : `${this.arbiter.source}${this.devices.manual.source ? `(${this.devices.manual.source})` : ''}${this.devices.remote.status === 'open' ? ` · phone ${this.devices.remote.latencyMs.toFixed(0)}ms` : ''}${this.devices.gamepad.connected ? ' · pad' : ''} · aid ${this.assistView.brake.toFixed(2)} · t${this.car.throttleIn.toFixed(2)} b${this.car.brakeIn.toFixed(2)}`,
       traffic: `${this.nearMissTotal} near-miss · ${this.crashTotal} crashes · ${this.traffic.agents.filter((a) => a.active).length} cars · events ${this.events.history.length}${this.events.history.length ? ` (last ${this.events.history[this.events.history.length - 1]})` : ''}`,
       world: `${this.themeName} · s ${pS.toFixed(0)} · chunk ${chunk} · ${zone} · gen ${this.road.maxBuildMs.toFixed(2)}ms${this.coneHits > 0 ? ` · cones ${this.coneHits}` : ''}`,
       quality: `${this.quality.mode === 'auto' ? 'auto' : 'pinned'} ${this.quality.level} · ema ${this.quality.emaMs.toFixed(1)} ms`,

@@ -39,6 +39,8 @@ export interface GameSettings {
   /** PiP corner + scale 0.6..1.5 of the 330×248 base */
   pipCorner: 'tl' | 'tr' | 'bl' | 'br';
   pipScale: number;
+  /** ADR-013 forward-collision aid: light (default) / full (M7 feel) / off */
+  driverAid: 'light' | 'full' | 'off';
 }
 
 export interface Progress {
@@ -74,6 +76,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   reducedMotion: 'auto',
   pipCorner: 'br',
   pipScale: 1,
+  driverAid: 'light',
 };
 
 export const DEFAULT_PROGRESS: Progress = {

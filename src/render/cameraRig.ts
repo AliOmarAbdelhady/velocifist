@@ -81,10 +81,12 @@ export class CameraRig {
       this.pos.y = 1.12;
       this.vel.set(0, 0, 0);
     } else {
-      // CHASE / FAR: spring arm (critically damped, stiffness grows with speed)
-      const back = this.mode === 0 ? 6.5 + 0.8 * speedFrac : 11;
-      const up = this.mode === 0 ? 2.8 : 4.6;
-      const omega = this.mode === 0 ? 3.2 + 8.8 * speedFrac : 2.2 + 3.0 * speedFrac;
+      // CHASE / FAR: spring arm. ADR-013: the chase mount is CONSTANT —
+      // no pull-back with speed, slightly closer than before; the user wants
+      // the car pinned at the same apparent size whether cruising or stopped.
+      const back = this.mode === 0 ? 6.0 : 11;
+      const up = this.mode === 0 ? 2.6 : 4.6;
+      const omega = this.mode === 0 ? 7 : 2.2 + 3.0 * speedFrac;
       _anchor.set(c.x, 0, c.z).addScaledVector(_fwd, -back);
       _anchor.y = up;
       const k = omega * omega;
@@ -122,9 +124,10 @@ export class CameraRig {
 
     this.camera.position.set(this.pos.x + sx, this.pos.y + sy, this.pos.z);
     this.camera.lookAt(this.look);
-    const baseFov = this.mode === 1 ? 56 : 50;
-    // reduced motion: cap the speed-FOV swing to a mild 6° (comfort FOV ceiling)
-    const fovSpan = this.mode === 1 ? 24 : 28;
+    // ADR-013: near-constant FOV — a wide speed-FOV made the car LOOK far
+    // away under acceleration; 55°+9° keeps it big and close at all speeds
+    const baseFov = this.mode === 1 ? 56 : 55;
+    const fovSpan = this.mode === 1 ? 10 : 9;
     this.camera.fov = baseFov + fovSpan * speedFrac * (this.reduced ? 0.22 : 1);
     this.camera.updateProjectionMatrix();
   }

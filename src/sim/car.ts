@@ -37,8 +37,6 @@ export interface CarTune {
   downforce: number;
   /** max road-wheel steer at standstill, rad */
   deltaMax: number;
-  /** speed at which steering authority halves, m/s */
-  steerFadeSpeed: number;
   /** road-wheel steering slew rate, rad/s */
   steerRate: number;
   /** engine power, W (force = P/v above the launch cap) */
@@ -103,7 +101,9 @@ export class Car {
   ayLast = 0; // lateral body accel incl. centripetal, m/s² (roll visuals)
   beta = 0; // sideslip angle, rad
   rearSlip = 0; // rear-axle lateral saturation 0..1 (drift FX later)
-  gear = 1; // 1..7
+  gear = 1; // 1..7, 0 = reverse (renders as R)
+  /** ADR-013: brake-at-standstill latched reverse */
+  reversing = false;
   rpmNorm = 0; // 0..1 (engine audio in M6)
   /** Curved-world guide (M4): when set, off-road + soft wall use the lateral
    *  offset from the road spine instead of |x|. Null = straight road (tests). */
@@ -150,8 +150,19 @@ export class Car {
     const speedFrac = Math.min(1, Math.abs(this.u) / t.vCruise);
     const aero = 1 + t.downforce * speedFrac * speedFrac;
 
-    // ---- steering: speed-sensitive range, slew-limited, slide assist ----
-    const dMax = t.deltaMax / (1 + Math.abs(this.u) / t.steerFadeSpeed);
+    // ---- steering: ADR-013 grip governor ----
+    // The steering RANGE shrinks with speed so the lateral demand
+    // (v²·tanδ/L) never exceeds the tire envelope: with supercar-glue
+    // tires (~2 g) the car cannot oversteer, understeer, or rotate around
+    // itself BY CONSTRUCTION — full authority from standstill, ~24 m turn
+    // radius at the 80 km/h cruise cap. The old speed-fade curve is gone;
+    // the governor IS the fade, computed from actual available grip.
+    const aLatMax = ((t.muFront + t.muRear) / 2) * 9.81 * gripScale * aero;
+    const vRef = Math.max(Math.abs(this.u), 3.5);
+    const dMax = Math.min(
+      t.deltaMax,
+      Math.atan((aLatMax * (t.a + t.b)) / (vRef * vRef)),
+    );
     let target = clamp(intent.steer, -1, 1) * dMax;
     if (this.rearSlip > 0.62 && Math.abs(this.beta) > 0.08) {
       // counter-steer assist (EASY: earlier + stronger than the M1 tune) —
@@ -192,13 +203,23 @@ export class Car {
     // class) — full gas is a constant cruise like the old arcade racers,
     // never an ever-climbing speed. vMax stays as physics headroom only.
     const limiter = 1 - smoothstep(t.vCruise * 0.93, t.vCruise, Math.abs(this.u));
-    const drive =
-      Math.min(t.launchForce, t.powerW / Math.max(Math.abs(this.u), 4)) *
-      intent.throttle *
-      limiter *
-      this.powerScale;
-    // brake force is a decelerating (negative) contribution, split per axle
-    const brakeFwd = -t.brakeForce * intent.brake;
+    // ADR-013 reverse: brake held at a standstill engages reverse (arcade
+    // convention), capped ~20 km/h; throttle always drives forward.
+    this.reversing =
+      this.u <= 0.05 && intent.brake > 0.1 && intent.throttle < 0.1;
+    const drive = this.reversing
+      ? -t.launchForce *
+        0.3 *
+        intent.brake *
+        (1 - smoothstep(-5.0, -5.6, this.u))
+      : Math.min(t.launchForce, t.powerW / Math.max(Math.abs(this.u), 4)) *
+        intent.throttle *
+        limiter *
+        this.powerScale;
+    // brake force opposes CURRENT motion. While the reverse latch is on, the
+    // brake input IS the reverse throttle — applying service brakes too would
+    // cancel the reverse drive (found by the ADR-013 test suite).
+    const brakeFwd = -t.brakeForce * (this.reversing ? 0 : intent.brake) * sgnU;
     const muF = t.muFront * gripScale * aero;
     const muR = t.muRear * gripScale * aero;
     let FxF = drive * t.driveSplitFront + brakeFwd * t.brakeSplitFront;
@@ -233,8 +254,6 @@ export class Car {
     const ax = Ffwd / m + this.w * this.omega;
     const aw = Fright / m - this.u * this.omega;
     this.u += ax * dt;
-    // no reverse this milestone: braking stops at zero (reverse gear is out of scope)
-    if (this.u < 0) this.u = 0;
     this.w += aw * dt;
     // EASY: stronger scrub/yaw damping — the car actively refuses to spin
     // (ESC-plus: kills slides fast, leaves normal cornering untouched)
@@ -285,11 +304,12 @@ export class Car {
     this.beta = this.u > 2 ? Math.atan2(this.w, Math.abs(this.u)) : 0;
 
     // drivetrain (HUD/audio): 7 gears spread across the CRUISE cap — 80 km/h
-    // is top of 7th, so held gas sings at high rpm instead of idling mid-box
+    // is top of 7th, so held gas sings at high rpm instead of idling mid-box.
+    // gear 0 renders as R (ADR-013 reverse).
     const vf = clamp(Math.abs(this.u) / t.vCruise, 0, 0.9999);
     let g = 1;
     while (g < 7 && vf >= GEAR_FRACTIONS[g]) g++;
-    this.gear = g;
+    this.gear = this.u < -0.1 ? 0 : g;
     const lo = GEAR_FRACTIONS[g - 1];
     const hi = GEAR_FRACTIONS[g];
     this.rpmNorm = clamp(0.25 + 0.75 * ((vf - lo) / (hi - lo)), 0, 1);

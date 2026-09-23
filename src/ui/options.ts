@@ -19,6 +19,10 @@ export interface OptionsCallbacks {
   audioLatencyMs(): number | null;
   /** master volume apply (live, without waiting for a settings flush) */
   setVolume(v: number): void;
+  /** connect the phone remote to a relay (ws://host:port) */
+  connectRemote(url: string): void;
+  /** remote connection state for the status line */
+  remoteStatus(): { status: string; latencyMs: number };
 }
 
 export class OptionsPanel {
@@ -38,6 +42,9 @@ export class OptionsPanel {
   private readonly pipScale: HTMLInputElement;
   private readonly pipScaleVal: HTMLElement;
   private readonly quality: HTMLSelectElement;
+  private readonly aid: HTMLSelectElement;
+  private readonly relayUrl: HTMLInputElement;
+  private readonly relayStatus: HTMLElement;
   private readonly resetBtn: HTMLButtonElement;
   private readonly importFile: HTMLInputElement;
   private latTimer: number | null = null;
@@ -69,6 +76,9 @@ export class OptionsPanel {
     this.pipScale = document.getElementById('optPipScale') as HTMLInputElement;
     this.pipScaleVal = document.getElementById('optPipScaleVal')!;
     this.quality = document.getElementById('optQuality') as HTMLSelectElement;
+    this.aid = document.getElementById('optAid') as HTMLSelectElement;
+    this.relayUrl = document.getElementById('optRelayUrl') as HTMLInputElement;
+    this.relayStatus = document.getElementById('optRelayStatus')!;
     this.resetBtn = document.getElementById('optReset') as HTMLButtonElement;
     this.importFile = document.getElementById('optImportFile') as HTMLInputElement;
 
@@ -108,6 +118,13 @@ export class OptionsPanel {
     this.quality.addEventListener('change', () =>
       this.commit({ quality: this.quality.value as GameSettings['quality'] }),
     );
+    this.aid.addEventListener('change', () =>
+      this.commit({ driverAid: this.aid.value as GameSettings['driverAid'] }),
+    );
+    document.getElementById('optRelayConnect')!.addEventListener('click', () => {
+      const url = this.relayUrl.value.trim();
+      if (url) this.cb.connectRemote(url);
+    });
 
     document.getElementById('optExport')!.addEventListener('click', () => this.exportSave());
     document.getElementById('optImport')!.addEventListener('click', () => this.importFile.click());
@@ -128,7 +145,18 @@ export class OptionsPanel {
     this.syncFromSettings();
     this.root.classList.remove('hidden');
     this.refreshTrackerDependent();
-    this.latTimer = window.setInterval(() => this.updateLatency(), 500);
+    this.latTimer = window.setInterval(() => {
+      this.updateLatency();
+      const r = this.cb.remoteStatus();
+      this.relayStatus.textContent =
+        r.status === 'open'
+          ? `connected · ${r.latencyMs.toFixed(0)} ms`
+          : r.status === 'connecting'
+            ? 'connecting…'
+            : r.status === 'error'
+              ? 'unreachable — is the relay running?'
+              : 'not connected';
+    }, 500);
     this.updateLatency();
   }
 
@@ -163,6 +191,7 @@ export class OptionsPanel {
     this.pipScale.value = String(s.pipScale);
     this.pipScaleVal.textContent = `${Math.round(s.pipScale * 100)}%`;
     this.quality.value = s.quality;
+    this.aid.value = s.driverAid;
   }
 
   /** Recalibrate button + latency line reflect the live tracker. */

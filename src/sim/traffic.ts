@@ -170,9 +170,12 @@ export class TrafficSystem {
         if (ds > 0) {
           const gap = ds - (FAMILIES[a.family].halfL + pHalfL);
           const closing = Math.max(0.5, pu - a.dir * a.speed);
-          // brake distance to MATCH the leader at supercar braking (0.8 g) —
-          // the player survives by matching speed, not by stopping short
-          const brakeDist = (closing * closing) / 16 + 2;
+          // brake distance to MATCH the leader at ~1.6 g braking (ADR-013:
+          // 2 g supercar tires at 80% — the old /16 assumed the 1.2 g M5
+          // tires). Reaction margin scales with closing: jam pockets with
+          // 1-2 m/s closings are enterable by matching, high closings get a
+          // wider berth than the old flat 2 m.
+          const brakeDist = (closing * closing) / 31 + 0.4 * closing + 0.5;
           if (gap / closing < REACTION_T && gap < brakeDist) {
             blocked = true;
             break;

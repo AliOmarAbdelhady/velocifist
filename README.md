@@ -27,7 +27,16 @@ recommended — hand tracking needs a webcam and decent light)
 | Theme cycle | — | `T` |
 | Quality cycle | — | `Q` |
 | Switch car | — | `1` `2` `3` (unlocks by lifetime score) |
+| Reverse | — (hold brake at a stop) | `S` held at standstill |
 | Options (sensitivity, comfort, PiP, volume, data) | — | `O` / `⚙` |
+
+**Other controllers (M12):** PlayStation DualShock 4 (Bluetooth/USB — press a
+button to wake it, left stick steers, ✕/R2 gas, ○/□/L2 brake) and a **phone
+remote** — run `node scripts/remote-relay.mjs --serve` on the machine that
+plays, open the printed `http://<lan-ip>:8080/phone` on your phone (same
+WiFi): a real steering wheel you drag + gas/brake pedals, vibration on
+crashes, ~1-5 ms LAN latency. All controllers merge — the last one you touch
+drives.
 
 First camera run shows a short calibration wizard (hold both hands at 9 and
 3, fists closed). The picture-in-picture AR dashboard shows your tracked
@@ -57,6 +66,8 @@ node scripts/e2e-m7.mjs   # hand pipeline: demo autonomy, assist, fake camera
 node scripts/e2e-m8.mjs   # variety events + telemetry export (real download)
 node scripts/e2e-m9.mjs   # options overlay: pause, persist, one-handed, reset
 node scripts/e2e-m10.mjs  # ship gates: boot budgets, PWA offline, base paths
+node scripts/e2e-m11.mjs  # cruise regime: 80 km/h plateau, traffic at t≈0
+node scripts/e2e-m12.mjs  # phone remote drives via the real relay + reverse
 ```
 
 Dev backdoors (query params): `?pipdemo=1` synthetic hands drive the whole

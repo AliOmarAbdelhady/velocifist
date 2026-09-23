@@ -62,7 +62,7 @@ function driveIntoGaps(car: Car, traffic: TrafficSystem, road: RoadSystem): Driv
     // a player who keeps an escape, so the bot keeps one too)
     const closing = Math.max(0.5, car.u - a.speed);
     const gap = ds - 5; // ~ halfL + halfL
-    if (ds / closing < 1.9 || gap < (closing * closing) / 16 + 4) {
+    if (ds / closing < 1.9 || gap < (closing * closing) / 31 + 0.4 * closing + 2.5) {
       throttle = 0;
       brake = 0.8;
     }

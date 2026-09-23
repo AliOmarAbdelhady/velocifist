@@ -66,7 +66,7 @@ export class GameHud {
       this.lastKmh = kmh;
     }
     if (car.gear !== this.lastGear) {
-      this.gear.textContent = String(car.gear);
+      this.gear.textContent = car.gear === 0 ? 'R' : String(car.gear);
       this.lastGear = car.gear;
     }
     const score = Math.round(scoring.score);

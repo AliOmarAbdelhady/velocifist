@@ -249,9 +249,28 @@
           <input type="checkbox" id="optOneHanded" />
         </div>
         <div class="opt-row">
+          <label for="optAid">driver aid</label>
+          <select id="optAid">
+            <option value="light">light (recommended)</option>
+            <option value="full">full (strong auto-brake)</option>
+            <option value="off">off</option>
+          </select>
+        </div>
+        <div class="opt-row">
           <button id="optRecal" class="opt-btn">recalibrate hands</button>
           <span id="optRecalHint">camera mode only</span>
         </div>
+      </div>
+
+      <div class="opt-section">
+        <h2>CONTROLLERS</h2>
+        <div class="opt-row" style="flex-wrap: wrap;">
+          <label>phone remote</label>
+          <input type="text" id="optRelayUrl" placeholder="laptop-ip:8080" style="background:#1a2130;color:#e8ecf4;border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:10px;width:170px;font:14px ui-monospace,monospace;" />
+          <button id="optRelayConnect" class="opt-btn">connect</button>
+        </div>
+        <div class="opt-row"><span id="optRelayStatus" style="font:12px ui-monospace,monospace;color:#8a93a6;">not connected</span></div>
+        <div class="opt-row"><span style="font:12px ui-monospace,monospace;color:#8a93a6;">PS4 pad: pair by Bluetooth/USB, press a button — stick steers, ✕/R2 gas, ○/□/L2 brake</span></div>
       </div>
 
       <div class="opt-section">
