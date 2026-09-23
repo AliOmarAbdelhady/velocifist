@@ -91,6 +91,11 @@ export type RemoteStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'error';
  * sends pings for the latency readout. Input decays to zero if the phone
  * goes quiet (screen lock, WiFi hiccup) so the car never sticks on.
  */
+/** Reconnect backoff: 0.5 s → 1 s → 2 s → 3 s (pure — tested). */
+export function remoteReconnectDelayMs(attempt: number): number {
+  return Math.min(3000, 500 * 2 ** Math.max(0, Math.min(attempt, 3)));
+}
+
 export class RemoteInput {
   readonly intent: DriverIntent = { steer: 0, throttle: 0, brake: 0 };
   status: RemoteStatus = 'idle';
@@ -102,6 +107,16 @@ export class RemoteInput {
   private pingSentAt = 0;
   private pingTimer: number | null = null;
   private readonly decayMs: number;
+  /** AUTO-RECONNECT (field report): phone sockets die mid-session (screen
+   *  lock, mobile background throttling, relay restart, WiFi blip) — the
+   *  phone page already redials every 0.8 s, but the GAME side never
+   *  reopened its socket, so the pedals went dead until a page reload.
+   *  Now both ends self-heal: retry with backoff, forever, unless the
+   *  disconnect was intentional. */
+  private lastUrl: string | null = null;
+  private retryTimer: number | null = null;
+  private retryAttempt = 0;
+  private intentionalClose = false;
 
   constructor(decayMs = 500) {
     this.decayMs = decayMs;
@@ -109,27 +124,37 @@ export class RemoteInput {
 
   connect(url: string): void {
     this.disconnect();
+    this.lastUrl = url;
+    this.intentionalClose = false;
+    this.retryAttempt = 0;
+    this.openSocket();
+  }
+
+  private openSocket(): void {
     this.status = 'connecting';
     let ws: WebSocket;
     try {
-      ws = new WebSocket(url);
+      ws = new WebSocket(this.lastUrl!);
     } catch {
       this.status = 'error';
+      this.scheduleReconnect();
       return;
     }
     this.ws = ws;
     ws.onopen = () => {
       this.status = 'open';
+      this.retryAttempt = 0;
       this.lastMsgAt = performance.now();
       this.pingTimer = window.setInterval(() => this.ping(), 700);
     };
     ws.onclose = () => {
       this.status = 'closed';
       this.stopPing();
+      this.scheduleReconnect();
     };
     ws.onerror = () => {
-      this.status = 'error';
       this.stopPing();
+      // close always follows error; the reconnect rides onclose
     };
     ws.onmessage = (ev) => {
       this.lastMsgAt = performance.now();
@@ -165,6 +190,16 @@ export class RemoteInput {
     }
   }
 
+  private scheduleReconnect(): void {
+    if (this.intentionalClose || this.lastUrl === null) return;
+    if (this.retryTimer !== null) window.clearTimeout(this.retryTimer);
+    const delay = remoteReconnectDelayMs(this.retryAttempt++);
+    this.retryTimer = window.setTimeout(() => {
+      this.retryTimer = null;
+      this.openSocket();
+    }, delay);
+  }
+
   update(): void {
     if (
       this.status === 'open' &&
@@ -182,6 +217,11 @@ export class RemoteInput {
   }
 
   disconnect(): void {
+    this.intentionalClose = true;
+    if (this.retryTimer !== null) {
+      window.clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     this.stopPing();
     this.ws?.close();
     this.ws = null;

@@ -121,6 +121,14 @@ await guest.waitForFunction(
   { timeout: 45000 },
 );
 console.log('GUEST wins by disconnect after host left');
+// restart WITHOUT reload: R on the versus results → back to the garage
+await guest.keyboard.press('KeyR');
+await guest.waitForFunction(
+  () => !document.getElementById('garage').classList.contains('hidden'),
+  null,
+  { timeout: 15000 },
+);
+console.log('GUEST restarted via R — garage shown, no reload needed');
 
 console.log('ERRORS host:', errors.host.length, errors.host.slice(0, 3));
 console.log('ERRORS guest:', errors.guest.length, errors.guest.slice(0, 3));

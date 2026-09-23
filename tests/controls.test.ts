@@ -268,3 +268,16 @@ describe('ADR-015 rival AI — cars defend against being overtaken', () => {
 
 import { TrafficSystem } from '../src/sim/traffic';
 import { RoadSystem } from '../src/sim/road';
+import { remoteReconnectDelayMs } from '../src/input/devices';
+
+describe('phone remote auto-reconnect (field-report fix)', () => {
+  it('backoff grows 0.5 → 1 → 2 s then caps at 3 s', () => {
+    expect(remoteReconnectDelayMs(0)).toBe(500);
+    expect(remoteReconnectDelayMs(1)).toBe(1000);
+    expect(remoteReconnectDelayMs(2)).toBe(2000);
+    expect(remoteReconnectDelayMs(3)).toBe(3000);
+    expect(remoteReconnectDelayMs(4)).toBe(3000);
+    expect(remoteReconnectDelayMs(99)).toBe(3000);
+    expect(remoteReconnectDelayMs(-5)).toBe(500);
+  });
+});

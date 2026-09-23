@@ -262,6 +262,8 @@ class Game {
   private instantWreck = false;
   /** ADR-018 versus: terminal verdict from the session, once */
   private vsOutcome: { won: boolean; outcome: VsOutcome } | null = null;
+  /** opponent left while the results screen was open (hint already swapped) */
+  private vsGoneHandled = false;
 
   constructor(
     private readonly getTracker: () => TrackerLike | null,
@@ -547,6 +549,10 @@ class Game {
     };
     this.coneHits += this.scene.update(pose, this.car, this.traffic, frameDt, performance.now() / 1000);
     if (this.versus) {
+      if (this.phase === 'results' && this.versus.opponentGone && !this.vsGoneHandled) {
+        this.vsGoneHandled = true;
+        this.applyVersusResultChrome();
+      }
       const rem = this.versus.remote;
       if (rem && this.versus.remoteAgeSec < 3) {
         this.scene.updateGhost(rem.s, rem.lat, rem.hRel, rem.u, frameDt);
@@ -644,6 +650,10 @@ class Game {
     else if (e.code === 'Digit3') this.switchCar(2);
     else if (this.phase === 'results' && !this.versus && (e.code === 'KeyR' || e.code === 'Enter')) {
       this.retry();
+    } else if (this.phase === 'results' && this.versus && (e.code === 'KeyR' || e.code === 'Enter')) {
+      // versus "again" = leave to the garage (REMATCH needs the opponent;
+      // R must ALWAYS work — a dead host must never trap the player)
+      this.leaveVersus();
     } else if (this.phase === 'results' && e.code === 'KeyG') {
       if (this.versus) this.leaveVersus();
       else this.toGarage();
@@ -703,6 +713,23 @@ class Game {
       this.scoring, this.car, this.themeName, this.runT, persist, this.runTelemetry,
       oc ? { title: oc.won ? 'VICTORY' : 'DEFEAT', line: `${how} · ${(this.traffic.playerS / 1000).toFixed(2)} km driven` } : null,
     );
+    this.applyVersusResultChrome();
+  }
+
+  /** versus results: role-correct hint; rematch dies with the opponent */
+  private applyVersusResultChrome(): void {
+    const vs = this.versus;
+    if (!vs) return;
+    const hint = document.getElementById('resultsHint')!;
+    const rematch = document.getElementById('btnVsRematch')!;
+    if (vs.opponentGone) {
+      rematch.classList.add('hidden');
+      hint.textContent = 'opponent left — R or ENTER — back to garage for a new match';
+    } else if (vs.isHost) {
+      hint.textContent = 'REMATCH — race again (new world) · R — back to garage';
+    } else {
+      hint.textContent = 'REMATCH — ask the host to race again · R — back to garage';
+    }
   }
 
   private readonly onVsRematch = (): void => {

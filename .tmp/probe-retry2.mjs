@@ -1,0 +1,21 @@
+import { createRequire } from 'node:module';
+import { execSync } from 'node:child_process';
+const globalRoot = execSync('npm root -g').toString().trim();
+const { chromium } = createRequire(import.meta.url)(`${globalRoot}/playwright`);
+const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await (await browser.newContext({ viewport: { width: 960, height: 540 } })).newPage();
+page.on('pageerror', (e) => console.log('PAGEERROR:', e.message));
+await page.goto('http://localhost:5173/?instantwreck=1');
+await page.waitForTimeout(600);
+await page.click('#overlay'); await page.waitForTimeout(250);
+await page.click('#btnGarageGo'); await page.waitForTimeout(150);
+await page.click('#btnKb'); await page.waitForTimeout(4000);
+console.log('results up:', await page.evaluate(() => !document.getElementById('results').classList.contains('hidden')));
+await page.evaluate(() => document.getElementById('btnRetryRun').click());
+await page.waitForTimeout(2000); // before the re-wreck at 1.5s+cinematic
+const hidden = await page.evaluate(() => document.getElementById('results').classList.contains('hidden'));
+await page.keyboard.down('w');
+await page.waitForTimeout(2000);
+const kmh = await page.evaluate(() => Number(document.getElementById('hudKmh').textContent) || 0);
+console.log('after RETRY: results hidden=', hidden, '| kmh at 2s gas =', kmh);
+await browser.close();

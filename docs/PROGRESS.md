@@ -224,3 +224,10 @@
 - Transport replaced: MQTT-over-WSS via public anonymous brokers (emqx + hivemq fallback), mqtt.js lazy chunk (~340 kB, solo payload untouched); peerjs/peer deps removed. Topics per match code; hello repeat (1 Hz) until start; LWT bye; 20 s join timeout ("no match with that code"); ping/pong at 1 Hz.
 - Verification: 250/253 tests; build green; **e2e-m19 now runs the full two-browser match through the REAL public relay** (code → countdown → race → VICTORY/DEFEAT → rematch → disconnect win, 0 console errors).
 - Docs: ADR-018 amendment, PILL 122, README, SW cache roben-v3.
+
+### Session 22 (2026-09-23) — restart / no-response fixes (field reports)
+- Root cause of both reports: the phone remote's game-side WebSocket never reconnected after a drop (screen lock / throttling / relay hiccup) — pedals dead until reload. RemoteInput now auto-reconnects (0.5→3 s backoff, forever); phone page already redialed.
+- Solo retry verified healthy by probes (button + R key, idle up to 90 s, natural wreck) — the perceived "not restarted" was the dead remote on the fresh run.
+- Versus exits hardened: R/Enter after a versus result always returns to the garage; opponentGone tracking (bye/LWT) kills the rematch button with an explanatory hint; guest rematch to a silent host self-reports after 5 s. e2e-m19 asserts the R-to-garage path.
+- New e2e-reconnect: phone socket hard-killed mid-run, phone redials, gas works with NO reload. Verification: 251/254 tests, build green, e2e m12/m19/reconnect green.
+- Docs: PILLs 123–125, SW cache roben-v4.

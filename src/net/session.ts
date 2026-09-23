@@ -59,11 +59,14 @@ export class VersusSession {
   statusText = 'connecting…';
   remote: RemotePose | null = null;
   remoteAgeSec = Infinity;
+  /** the opponent left AFTER the verdict (results still shown, rematch dead) */
+  opponentGone = false;
 
   private link: BusLink | null = null;
   private waitHintTimer: ReturnType<typeof setTimeout> | null = null;
   private helloTimer: ReturnType<typeof setInterval> | null = null;
   private joinTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+  private rematchAskTimer: ReturnType<typeof setTimeout> | null = null;
   private lastPoseAt = 0;
   private seed = 0;
   private target = vsTargetFromUrl();
@@ -132,7 +135,14 @@ export class VersusSession {
         this.onChanged();
       },
       onPeerClosed: () => {
-        if (this.state === 'finished' || this.state === 'dead') return;
+        if (this.state === 'finished') {
+          // verdict already shown — but a rematch is now impossible; say so
+          this.opponentGone = true;
+          this.statusText = 'the opponent left — press R to start a new match';
+          this.onChanged();
+          return;
+        }
+        if (this.state === 'dead') return;
         this.race?.remoteLeft();
         this.settle();
         if ((this.state as SessionState) !== 'finished') {
@@ -187,6 +197,10 @@ export class VersusSession {
       case 'start':
         if (!this.isHost && (this.state === 'lobby' || this.state === 'finished')) {
           this.stopHelloRepeat();
+          if (this.rematchAskTimer !== null) {
+            clearTimeout(this.rematchAskTimer);
+            this.rematchAskTimer = null;
+          }
           this.beginRace(msg.seed, msg.target, false);
         }
         break;
@@ -241,8 +255,20 @@ export class VersusSession {
   /** GUEST results screen: ask the host for a rematch. */
   requestRematch(): void {
     if (this.isHost || this.state !== 'finished') return;
+    if (this.opponentGone) {
+      this.statusText = 'the host is gone — press R to start a new match';
+      this.onChanged();
+      return;
+    }
     this.send({ t: 'rematch' });
     this.statusText = 'asking the host for a rematch…';
+    if (this.rematchAskTimer !== null) clearTimeout(this.rematchAskTimer);
+    this.rematchAskTimer = setTimeout(() => {
+      if (this.state === 'finished' && !this.opponentGone) {
+        this.statusText = 'no answer from the host — press R to start a new match';
+        this.onChanged();
+      }
+    }, 5000);
     this.onChanged();
   }
 
@@ -299,6 +325,10 @@ export class VersusSession {
   }
 
   leave(): void {
+    if (this.rematchAskTimer !== null) {
+      clearTimeout(this.rematchAskTimer);
+      this.rematchAskTimer = null;
+    }
     if (this.waitHintTimer !== null) {
       clearTimeout(this.waitHintTimer);
       this.waitHintTimer = null;
