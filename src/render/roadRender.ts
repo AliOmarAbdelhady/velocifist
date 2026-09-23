@@ -47,15 +47,15 @@ export function makeMarkingsTexture(): THREE.CanvasTexture {
   for (let variant = 0; variant < 2; variant++) {
     const ox = variant * 256;
     // asphalt-ish noise (luminance only — tinted by the material colour)
-    g.fillStyle = '#7e7e7e';
+    g.fillStyle = '#5e5e5e';
     g.fillRect(ox, 0, 256, 128);
     for (let i = 0; i < 550; i++) {
-      const v = 112 + Math.floor(Math.random() * 24);
+      const v = 92 + Math.floor(Math.random() * 26);
       g.fillStyle = `rgb(${v},${v},${v})`;
       g.fillRect(ox + Math.random() * 256, Math.random() * 128, 2, 2);
     }
     // gravel shoulders (outer 3 m each side of the 30 m band)
-    g.fillStyle = '#5a554b';
+    g.fillStyle = '#48443c';
     g.fillRect(ox, 0, 26, 128);
     g.fillRect(ox + 230, 0, 26, 128);
 

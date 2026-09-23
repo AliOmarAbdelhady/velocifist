@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0b0e1a" />
-  <meta name="description" content="Weave traffic with your bare hands — webcam hand-tracked racing. 100% local, nothing uploaded." />
+  <meta name="theme-color" content="#0d3f66" />
+  <meta name="description" content="ROBEN VELOCIFIST — weave traffic at 200 km/h. By RobEn Club · roben.club. Keyboard, PS4 pad, phone remote, tilt wheel." />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <title>VELOCIFIST</title>
+  <title>ROBEN VELOCIFIST — by RobEn Club</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0e1a'/%3E%3Cpath d='M6 21 L16 8 L26 21 L20.5 21 L16 14.5 L11.5 21 Z' fill='%23ff5a3c'/%3E%3C/svg%3E">
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e14; }
@@ -19,7 +19,8 @@
       background: rgba(8, 10, 16, 0.84); color: #e8ecf4;
       font-family: 'Segoe UI', system-ui, sans-serif; text-align: center;
     }
-    #overlay h1, #wizardTitle { font-size: 56px; letter-spacing: 0.14em; margin: 0; color: #ff5a1f; text-transform: uppercase; }
+    #overlay h1 { font-size: 56px; letter-spacing: 0.14em; margin: 0; color: #2f9ce0; }
+    #wizardTitle { font-size: 56px; letter-spacing: 0.14em; margin: 0; color: #2f9ce0; text-transform: uppercase; }
     .tag { color: #9aa4b8; letter-spacing: 0.1em; margin: 0; }
     .keys { color: #d7dee9; font-size: 15px; margin: 0; }
     #devhud {
@@ -37,7 +38,7 @@
       background: rgba(13,17,26,0.97); border: 1px solid rgba(255,255,255,0.1);
       border-radius: 14px; padding: 22px 26px 18px; text-align: left;
       font-family: 'Segoe UI', system-ui, sans-serif; }
-    #optionsPanel h1 { font-size: 26px; letter-spacing: 0.18em; margin: 0 0 6px; color: #ff5a1f; }
+    #optionsPanel h1 { font-size: 26px; letter-spacing: 0.18em; margin: 0 0 6px; color: #2f9ce0; }
     .opt-section { margin-top: 14px; }
     .opt-section h2 { font-size: 12px; letter-spacing: 0.22em; color: #9aa4b8; margin: 0 0 4px;
       border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px; }
@@ -45,14 +46,14 @@
       min-height: 44px; font-size: 15px; color: #d7dee9; }
     .opt-row label { flex: 1; }
     .opt-row .val { font: 600 14px ui-monospace, monospace; color: #ffb01f; min-width: 52px; text-align: right; }
-    .opt-row input[type='range'] { width: 180px; accent-color: #ff5a1f; height: 28px; }
-    .opt-row input[type='checkbox'] { width: 22px; height: 22px; accent-color: #ff5a1f; }
+    .opt-row input[type='range'] { width: 180px; accent-color: #2f9ce0; height: 28px; }
+    .opt-row input[type='checkbox'] { width: 22px; height: 22px; accent-color: #2f9ce0; }
     .opt-row select { background: #1a2130; color: #e8ecf4; border: 1px solid rgba(255,255,255,0.15);
       border-radius: 6px; padding: 8px 10px; font-size: 14px; }
     .opt-corners { display: flex; gap: 6px; }
     .opt-corners button { min-width: 44px; min-height: 34px; font: 600 13px ui-monospace, monospace;
       background: #1a2130; color: #cfd6e4; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; cursor: pointer; }
-    .opt-corners button.sel { border-color: #ff5a1f; color: #ff5a1f; background: rgba(255,90,31,0.12); }
+    .opt-corners button.sel { border-color: #2f9ce0; color: #2f9ce0; background: rgba(47,156,224,0.14); }
     .opt-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .opt-actions button { font: 600 13px 'Segoe UI', system-ui; background: #3a4356; color: #e8ecf4;
       border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; min-height: 40px; }
@@ -96,14 +97,14 @@
     #wizardBody { white-space: pre; color: #cfd6e4; font-size: 15px; max-width: 520px; }
     #wizard { background: rgba(8, 10, 16, 0.9); cursor: default; gap: 10px; }
     #wizardBarWrap { width: 420px; max-width: 80vw; height: 10px; background: rgba(255,255,255,0.12); border-radius: 5px; overflow: hidden; }
-    #wizardBar { height: 100%; width: 0%; background: linear-gradient(90deg, #ff5a1f, #ffb01f); }
+    #wizardBar { height: 100%; width: 0%; background: linear-gradient(90deg, #1e7bb8, #20c997); }
     #camchoice button {
-      font: 600 16px 'Segoe UI', system-ui, sans-serif; color: #0b0e14; background: #ff5a1f;
+      font: 600 16px 'Segoe UI', system-ui, sans-serif; color: #0b0e14; background: #2f9ce0;
       border: 0; border-radius: 8px; padding: 14px 26px; margin: 8px; cursor: pointer;
     }
     #camchoice button.secondary, #results button, #garage .garage-foot button { background: #3a4356; color: #e8ecf4; }
     .overlay button {
-      font: 600 16px 'Segoe UI', system-ui, sans-serif; color: #0b0e14; background: #ff5a1f;
+      font: 600 16px 'Segoe UI', system-ui, sans-serif; color: #0b0e14; background: #2f9ce0;
       border: 0; border-radius: 8px; padding: 14px 26px; margin: 8px; cursor: pointer;
     }
     .hidden { display: none !important; }
@@ -117,7 +118,7 @@
     #hudScore { position: absolute; top: 14px; right: 20px; text-align: right; text-shadow: 0 2px 10px rgba(0,0,0,0.75); }
     #hudScore .pts { font-size: 34px; font-weight: 700; }
     #hudScore .combo { font-size: 18px; color: #ffb01f; height: 22px; }
-    #hudScore .flow { color: #59f7ff; }
+    #hudScore .flow { color: #20c997; }
     #hudHealthWrap { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: 300px; text-align: center; }
     #hudHealthLabel { font-size: 12px; letter-spacing: 0.22em; color: #9aa4b8; text-shadow: 0 1px 6px rgba(0,0,0,0.8); }
     #hudHealthBar { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.14); overflow: hidden; margin-top: 4px; }
@@ -125,13 +126,13 @@
     #hudToasts { position: absolute; left: 50%; top: 26%; transform: translateX(-50%); text-align: center; }
     .toast { font-size: 26px; font-weight: 700; text-shadow: 0 2px 12px rgba(0,0,0,0.85);
       animation: toastRise 1.4s ease-out forwards; margin: 2px 0; }
-    .toast.inches { color: #ff5a1f; font-size: 32px; }
+    .toast.inches { color: #ff6b4a; font-size: 32px; }
     .toast.very { color: #ffb01f; }
     .toast.near { color: #e8ecf4; }
-    .toast.oncoming::after { content: " ⚡ONCOMING ×2"; color: #59f7ff; font-size: 18px; }
+    .toast.oncoming::after { content: " ⚡ONCOMING ×2"; color: #20c997; font-size: 18px; }
     .toast.pass { color: #9fe870; font-size: 20px; }
-    .toast.streak { color: #59f7ff; font-size: 24px; }
-    .toast.flow { color: #59f7ff; font-size: 30px; letter-spacing: 0.3em; }
+    .toast.streak { color: #20c997; font-size: 24px; }
+    .toast.flow { color: #20c997; font-size: 30px; letter-spacing: 0.3em; }
     @keyframes toastRise {
       0% { opacity: 0; transform: translateY(14px) scale(0.9); }
       15% { opacity: 1; transform: translateY(0) scale(1); }
@@ -141,25 +142,25 @@
 
     /* ---- results / garage (M5) ---- */
     #results { cursor: default; }
-    #results h1 { font-size: 44px; letter-spacing: 0.12em; margin: 0; color: #ff5a1f; }
+    #results h1 { font-size: 44px; letter-spacing: 0.12em; margin: 0; color: #2f9ce0; }
     #results .newbest { color: #ffb01f; font-size: 22px; letter-spacing: 0.28em; animation: pulse 1.1s ease-in-out infinite; }
     @keyframes pulse { 50% { opacity: 0.45; } }
     #results table { border-collapse: collapse; margin: 6px 0 14px; font-size: 16px; color: #cfd6e4; }
     #results td { padding: 3px 16px; text-align: left; }
     #results td.v { text-align: right; color: #e8ecf4; font-weight: 600; }
     #garage { cursor: default; }
-    #garage h1 { font-size: 34px; letter-spacing: 0.14em; margin: 0; color: #ff5a1f; }
+    #garage h1 { font-size: 34px; letter-spacing: 0.14em; margin: 0; color: #2f9ce0; }
     #garage .cars { display: flex; gap: 18px; margin: 18px 0 6px; }
     #garage .card { width: 240px; padding: 16px 18px; border-radius: 12px; background: rgba(255,255,255,0.05);
       border: 2px solid transparent; text-align: left; color: #cfd6e4; }
-    #garage .card.sel { border-color: #ff5a1f; background: rgba(255,90,31,0.1); }
+    #garage .card.sel { border-color: #2f9ce0; background: rgba(47,156,224,0.12); }
     #garage .card.locked { opacity: 0.45; }
     #garage .card h2 { margin: 0 0 2px; font-size: 22px; color: #e8ecf4; }
     #garage .card .cls { font-size: 12px; letter-spacing: 0.18em; color: #9aa4b8; margin-bottom: 10px; }
     #garage .statrow { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 3px 0; }
     #garage .statrow span { width: 52px; color: #9aa4b8; }
     #garage .bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.12); overflow: hidden; }
-    #garage .bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff5a1f, #ffb01f); }
+    #garage .bar i { display: block; height: 100%; background: linear-gradient(90deg, #1e7bb8, #20c997); }
     #garage .locknote { font-size: 12px; color: #ffb01f; margin-top: 8px; }
     #garage .garage-foot { margin-top: 12px; }
   </style>
@@ -189,8 +190,9 @@
   <div id="pipwrap" class="hidden"><canvas id="pip"></canvas></div>
 
   <div id="overlay" class="overlay">
-    <h1>Velocifist</h1>
-    <p class="tag">WEAVE TRAFFIC WITH YOUR BARE HANDS</p>
+    <img src="roben.svg" alt="RobEn Club" width="104" height="104" style="border-radius:24px;box-shadow:0 8px 32px rgba(25,105,157,0.55);" />
+    <h1>RobEn Velocifist</h1>
+    <p class="tag">BY ROBEN CLUB · ROBEN.CLUB · DESIGN YOUR FUTURE</p>
     <p class="keys">fists = throttle · open palms = brake · cross hands for lock</p>
     <p class="keys">keyboard always works: W/S · A/D · C camera · O options · 1/2/3 car</p>
     <p class="keys">CLICK TO START</p>

@@ -173,6 +173,81 @@ function blobShadowTexture(): THREE.Texture {
   return blobTex;
 }
 
+/** ADR-017 livery: the RobEn robot-head roundel — azure head on a white disc. */
+function robenRoundelTexture(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d')!;
+  g.translate(128, 132);
+  g.fillStyle = '#f4f6f8';
+  g.beginPath();
+  g.arc(0, 0, 118, 0, Math.PI * 2);
+  g.fill();
+  g.lineWidth = 7;
+  g.strokeStyle = '#8ca3c5';
+  g.stroke();
+  g.strokeStyle = '#19699d';
+  g.lineCap = 'round';
+  g.lineWidth = 21;
+  g.beginPath();
+  g.arc(0, 6, 55, 0, Math.PI * 2);
+  g.stroke();
+  g.lineWidth = 15;
+  g.beginPath();
+  g.moveTo(-33, -2);
+  g.quadraticCurveTo(-21, -22, -9, -2);
+  g.moveTo(9, -2);
+  g.quadraticCurveTo(21, -22, 33, -2);
+  g.moveTo(-16, 34);
+  g.quadraticCurveTo(0, 46, 16, 34);
+  g.stroke();
+  g.lineWidth = 12;
+  g.beginPath();
+  g.moveTo(0, -49);
+  g.lineTo(0, -80);
+  g.stroke();
+  g.fillStyle = '#19699d';
+  g.beginPath();
+  g.arc(0, -88, 10, 0, Math.PI * 2);
+  g.fill();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/** ADR-017 livery: "RobEn" wordmark — gray Rob + azure En, transparent bg. */
+function robenWordmarkTexture(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 128;
+  const g = c.getContext('2d')!;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = "800 86px 'Segoe UI', system-ui, sans-serif";
+  g.fillStyle = '#676767';
+  g.fillText('Rob', 148, 68);
+  g.fillStyle = '#19699d';
+  g.fillText('En', 328, 68);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/** hood roundel placement per archetype: [height frac of h, tilt deg] */
+const LIVERY_HOOD: Record<string, [number, number]> = {
+  'falcone-gt': [0.53, -4],
+  'vipera-rs': [0.65, -12],
+  'bruto-widebody': [0.77, -3],
+};
+/** rear-deck wordmark height frac of h */
+const LIVERY_DECK: Record<string, number> = {
+  'falcone-gt': 0.83,
+  'vipera-rs': 0.92,
+  'bruto-widebody': 0.87,
+};
+
 export class CarView {
   readonly group = new THREE.Group();
   private bodyGroup = new THREE.Group();
@@ -339,6 +414,42 @@ export class CarView {
     this.geometries.push(tips.geometry);
     this.materials.push(tipMat);
     this.group.add(this.bodyGroup);
+
+    // ---- ADR-017 RobEn livery: hood roundel + rear-deck wordmark ----
+    const decalMat = (map: THREE.Texture): THREE.MeshStandardMaterial =>
+      new THREE.MeshStandardMaterial({
+        map,
+        transparent: true,
+        roughness: 0.35,
+        metalness: 0.1,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+      });
+    const [hoodY, hoodTilt] = LIVERY_HOOD[id] ?? [0.55, -5];
+    const roundelGeo = new THREE.PlaneGeometry(0.72, 0.72);
+    roundelGeo.rotateX(-Math.PI / 2);
+    roundelGeo.rotateX((hoodTilt * Math.PI) / 180);
+    const roundel = new THREE.Mesh(roundelGeo, decalMat(robenRoundelTexture()));
+    roundel.position.set(0, h * hoodY + 0.015, -l * 0.22);
+    this.bodyGroup.add(roundel);
+    this.geometries.push(roundelGeo);
+    this.materials.push(roundel.material as THREE.Material);
+    const wordGeo = new THREE.PlaneGeometry(1.3, 0.325);
+    wordGeo.rotateX(-Math.PI / 2);
+    wordGeo.rotateX((8 * Math.PI) / 180);
+    const wordmark = new THREE.Mesh(wordGeo, decalMat(robenWordmarkTexture()));
+    wordmark.position.set(0, h * (LIVERY_DECK[id] ?? 0.84) + 0.015, l * 0.33);
+    this.bodyGroup.add(wordmark);
+    this.geometries.push(wordGeo);
+    this.materials.push(wordmark.material as THREE.Material);
+    // chase cam sees the REAR 95% of the time — a backward-facing RobEn
+    // panel under the tail bar is the brand moment the player actually sees
+    const rearGeo = new THREE.PlaneGeometry(1.35, 0.34);
+    const rear = new THREE.Mesh(rearGeo, decalMat(robenWordmarkTexture()));
+    rear.position.set(0, h * 0.45, l * 0.5 + 0.015);
+    this.bodyGroup.add(rear);
+    this.geometries.push(rearGeo);
+    this.materials.push(rear.material as THREE.Material);
 
     // ---- wheels: single cylinder per wheel; spoke texture lives on the
     // side caps (material groups: side / top cap / bottom cap) so the rims

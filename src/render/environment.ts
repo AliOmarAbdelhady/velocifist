@@ -44,7 +44,7 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     sun: { color: 0xffc98a, intensity: 2.1 },
     ground: 0x5b4a4a,
     water: 0x1d5568,
-    road: { asphaltTint: 0x8a8078, roughness: 0.9, metalness: 0.0, railColor: 0x8a8478 },
+    road: { asphaltTint: 0xb2aaa4, roughness: 0.9, metalness: 0.0, railColor: 0x9a948a },
   },
   neon: {
     id: 'neon',
@@ -54,7 +54,7 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     hemi: { sky: 0x33406e, ground: 0x1a1030, intensity: 0.5 },
     sun: { color: 0xb9c8ff, intensity: 0.5 },
     ground: 0x10131f,
-    road: { asphaltTint: 0xa8b2cc, roughness: 0.38, metalness: 0.12, railColor: 0x87929f },
+    road: { asphaltTint: 0xbac4dc, roughness: 0.38, metalness: 0.12, railColor: 0x87929f },
   },
   desert: {
     id: 'desert',
@@ -64,7 +64,7 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     hemi: { sky: 0xcfe4ff, ground: 0xa8895f, intensity: 1.0 },
     sun: { color: 0xfff3d0, intensity: 2.6 },
     ground: 0xc9a86a,
-    road: { asphaltTint: 0x9a8f80, roughness: 0.95, metalness: 0.0, railColor: 0xb7bcc4 },
+    road: { asphaltTint: 0xbcb2a6, roughness: 0.95, metalness: 0.0, railColor: 0xb7bcc4 },
   },
 };
 

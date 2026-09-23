@@ -4,7 +4,7 @@
 // on first fetch (cache-first for assets, network-first for navigations).
 // The 20 MB wasm+model land in the same cache: once you have played with the
 // camera once, the whole game — tracking included — works offline.
-const CACHE = 'velocifist-v1';
+const CACHE = 'roben-v1'; // ADR-017: renamed cache forces one clean refetch of the rebranded app
 
 self.addEventListener('install', () => {
   self.skipWaiting();

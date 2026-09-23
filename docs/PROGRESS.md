@@ -197,3 +197,11 @@
 - Car realism: clearcoat paint (MeshPhysicalMaterial), front splitter, rear-deck vents, side blades, 10-spoke rims.
 - Verification: 238/238 tests (gates re-derived: plateau −1.8, g ≤ 2.6, radius ≤ 210, density curve); build green; e2e m6/m11/m12 green — plateau 196 km/h @ gear 7, 77% hold, coast 196→188; 0 console errors.
 - Docs: ADR-016, PILLs 110–112, PLAN v3.0.
+
+### Session 18 (2026-09-23, M18) — RobEn rebrand: ROBEN VELOCIFIST (ADR-017)
+- Mark recreated as hand-built SVG from a vision-extracted recipe (robot head, navy→azure tile): favicon roben.svg, PWA icons regenerated, manifest renamed (ROBEN / ROBEN VELOCIFIST, theme #19699D), SW cache bumped to roben-v1.
+- UI accents orange → RobEn azure #2f9ce0 (buttons/h1s/selection), flow/streak cyan → teal #20c997, bars azure→teal gradients; overlay now shows the logo tile + mixed-case "RobEn Velocifist" + "BY ROBEN CLUB · ROBEN.CLUB · DESIGN YOUR FUTURE"; README rebranded.
+- Livery: azure paints per archetype (0x1a76b8/0x19699d/0x0e4f7e), hood robot-head roundel, rear-deck wordmark, and a rear-fascia "RobEn" panel the chase cam actually reads.
+- Visual QA loop (subagent passes): caught the invisible deck wordmark (moved to rear fascia), weak dusk marking contrast (asphalt #5e5e5e + tints ~0xb2aaa4 → CLEAR readability), uppercase title hiding the "RobEn" casing.
+- Verification: 238/238 tests, build green, deterministic crop review passed (wordmark readable, markings CLEAR, 7-8 posts with amber reflectors).
+- Docs: ADR-017, PILLs 113–115.

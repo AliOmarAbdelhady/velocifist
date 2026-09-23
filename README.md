@@ -1,10 +1,12 @@
-# VELOCIFIST ⚡
+# ROBEN VELOCIFIST ⚡
 
-**Weave highway traffic with your bare hands.** A third-person, chase-camera
-traffic-weaving racer you drive with your real hands in front of a webcam:
-both fists on an invisible wheel → full throttle · open palms → brake · turn
-the invisible wheel — cross your right hand over your left for full lock.
-Keyboard always works too.
+**Made for [RobEn Club](https://roben.club)** (AAST — Robotic Entrepreneur ·
+"Design Your Future"). A third-person, chase-camera traffic-weaving racer:
+200 km/h constant-gas cruise, rivals that read your line and close the door,
+escalating traffic, invite-code 1v1 versus races — driven by keyboard,
+PS4 controller, your phone as a wheel (drag or tilt), or your bare hands in
+front of a webcam (fists = throttle, open palms = brake, turn the invisible
+wheel — cross your right hand over your left for full lock).
 
 Everything runs **100% locally in your browser** — hand tracking (MediaPipe)
 executes on-device, the video never leaves your machine, nothing is recorded
