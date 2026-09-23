@@ -15,8 +15,9 @@ or uploaded.
 **Versus multiplayer:** garage → **VERSUS** → *CREATE MATCH* and send the
 5-character code to a friend; they *JOIN* with it and you race the same
 world to 5 km — opponent rendered as a ghost, live gap + ping on the HUD,
-rematch and leave built in. Peer-to-peer (WebRTC); the free PeerJS cloud
-only brokers the handshake.
+rematch and leave built in. Routed over secure WebSocket through public
+MQTT relays — works across ANY two networks (phone data ↔ home WiFi), no
+same-network requirement, nothing to install.
 
 **Play:** https://aliomarabdelhady.github.io/velocifist/ (Chrome/Edge
 recommended — hand tracking needs a webcam and decent light)

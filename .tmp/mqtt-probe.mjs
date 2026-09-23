@@ -1,0 +1,11 @@
+import { createRequire } from 'node:module';
+import { execSync } from 'node:child_process';
+const globalRoot = execSync('npm root -g').toString().trim();
+const { chromium } = createRequire(import.meta.url)(`${globalRoot}/playwright`);
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const page = await (await browser.newContext()).newPage();
+page.on('console', (m) => console.log('console:', m.text()));
+await page.goto('http://localhost:5173/test-mqtt.html');
+await page.waitForFunction(() => (window.__log || []).includes('DONE'), null, { timeout: 40000 });
+console.log((await page.evaluate(() => window.__log.join('\n'))));
+await browser.close();

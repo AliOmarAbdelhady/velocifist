@@ -1,33 +1,15 @@
-// E2E M19 (ADR-018): a full versus match between two real browser pages over
-// WebRTC against a LOCAL PeerServer (no internet broker in CI):
-//   host creates → code shown → guest joins by code → auto-start → synced
-//   countdown → both drive (host unimpeded, guest delayed) → host wins the
-//   shortened race (?vstarget=400) → VICTORY/DEFEAT screens → rematch →
-//   host leaves → guest wins by disconnect.
+// E2E M19 (ADR-018 v2): a full versus match between two real browser pages
+// through the REAL public MQTT relay (the exact production path — no local
+// server, no mocks): host creates → code shown → guest joins by code →
+// auto-start → synced countdown → both drive (host unimpeded, guest delayed)
+// → host wins the shortened race (?vstarget=400) → VICTORY/DEFEAT →
+// rematch → host leaves → guest wins by disconnect.
 import { createRequire } from 'node:module';
-import { execSync, spawn } from 'node:child_process';
+import { execSync } from 'node:child_process';
 
 const globalRoot = execSync('npm root -g').toString().trim();
 const { chromium } = createRequire(import.meta.url)(`${globalRoot}/playwright`);
 
-const PEER_PORT = 9012;
-const peer = spawn('npx', ['peerjs', '--port', String(PEER_PORT), '--key', 'localtest'], {
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
-await new Promise((res, rej) => {
-  const t = setTimeout(() => rej(new Error('peer server did not start')), 15000);
-  const ok = (d) => {
-    if (String(d).includes('Started PeerServer')) {
-      clearTimeout(t);
-      res();
-    }
-  };
-  peer.stdout.on('data', ok);
-  peer.stderr.on('data', ok);
-});
-console.log('local PeerServer on', PEER_PORT);
-
-const broker = 'broker=localhost:' + PEER_PORT + ':localtest';
 const browser = await chromium.launch({
   channel: 'chrome',
   headless: true,
@@ -40,8 +22,9 @@ function watch(page, tag) {
     if (m.type() === 'error') errors[tag].push('console: ' + m.text());
   });
 }
-const host = await (await browser.newContext({ viewport: { width: 960, height: 540 } })).newPage();
-const guest = await (await browser.newContext({ viewport: { width: 960, height: 540 } })).newPage();
+const mk = async () => (await browser.newContext({ viewport: { width: 960, height: 540 } })).newPage();
+const host = await mk();
+const guest = await mk();
 watch(host, 'host');
 watch(guest, 'guest');
 
@@ -55,22 +38,21 @@ async function openLobby(page, url) {
 }
 
 // host lobby → create (vstarget shortens the race for CI)
-await openLobby(host, 'http://localhost:5173/?' + broker + '&vstarget=400');
+await openLobby(host, 'http://localhost:5173/?vstarget=400');
 await host.click('#btnVsCreate');
 await host.waitForFunction(
   () => /^([2-9A-HJ-NP-Z]{5})$/.test(document.getElementById('vsCode').textContent ?? ''),
   null,
-  { timeout: 45000 },
+  { timeout: 45000 }, // public relay connect can take a few seconds
 );
 const code = (await host.textContent('#vsCode'))?.trim();
 console.log('HOST code:', code);
 
-// guest lobby → join with that code
-await openLobby(guest, 'http://localhost:5173/?' + broker);
+// guest lobby → join with that code (public relay, cross-"network" by design)
+await openLobby(guest, 'http://localhost:5173/?vstarget=400');
 await guest.fill('#vsJoinInput', code);
 await guest.click('#btnVsJoin');
 
-// both should auto-launch with a countdown (host auto-starts on guest hello)
 await host.waitForFunction(
   () => !document.getElementById('countdown').classList.contains('hidden'),
   null,
@@ -131,7 +113,7 @@ await guest.waitForFunction(
 );
 console.log('REMATCH: both counting down again');
 
-// host leaves mid-countdown → guest wins by disconnect
+// host leaves mid-countdown → guest wins by disconnect (bye via the relay)
 await host.evaluate(() => document.getElementById('btnVsQuit').click());
 await guest.waitForFunction(
   () => document.getElementById('resultsTitle').textContent === 'VICTORY',
@@ -143,9 +125,7 @@ console.log('GUEST wins by disconnect after host left');
 console.log('ERRORS host:', errors.host.length, errors.host.slice(0, 3));
 console.log('ERRORS guest:', errors.guest.length, errors.guest.slice(0, 3));
 await browser.close();
-peer.kill();
 
-process.on('exit', () => { try { peer.kill(); } catch {} });
 const pass = errors.host.length === 0 && errors.guest.length === 0 && !!code && code.length === 5;
 console.log(pass ? 'E2E M19 OK' : 'E2E M19 FAILED');
 process.exit(pass ? 0 : 1);

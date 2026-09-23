@@ -1,0 +1,33 @@
+<!doctype html><meta charset="utf-8"><body><script type="module">
+// two virtual "sides" in ONE page first: does mqtt-over-wss work in this browser?
+const mqtt = (await import('mqtt')).default;
+const log = [];
+window.__log = log;
+function side(name, url) {
+  return new Promise((res, rej) => {
+    const c = mqtt.connect(url, { clientId: 'robenprobe-' + name + '-' + Math.random().toString(16).slice(2), clean: true, connectTimeout: 8000, reconnectPeriod: 0 });
+    const t = setTimeout(() => rej(new Error(name + ' connect timeout')), 12000);
+    c.on('connect', () => { clearTimeout(t); log.push(name + ' connected'); res(c); });
+    c.on('error', (e) => { log.push(name + ' err ' + e.message); });
+    c.on('close', () => log.push(name + ' closed'));
+  });
+}
+try {
+  const t0 = performance.now();
+  const a = await side('a', 'wss://broker.emqx.io:8084/mqtt');
+  const b = await side('b', 'wss://broker.emqx.io:8084/mqtt');
+  log.push('both connected in ' + Math.round(performance.now() - t0) + ' ms');
+  b.subscribe('robenprobe/x');
+  await new Promise((r) => setTimeout(r, 400));
+  const t1 = performance.now();
+  a.publish('robenprobe/x', 'ping');
+  await new Promise((res) => { b.on('message', (topic, msg) => { log.push('latency ' + Math.round(performance.now() - t1) + ' ms: ' + msg.toString()); res(); }); setTimeout(res, 5000); });
+  // lwt check
+  a.end(false);
+  await new Promise((r) => setTimeout(r, 1500));
+  log.push('DONE');
+} catch (e) {
+  log.push('FAIL ' + e.message);
+  log.push('DONE');
+}
+</script></body>

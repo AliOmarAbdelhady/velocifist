@@ -4,7 +4,7 @@
 
 import { genCode, normalizeCode } from '../net/matchCode';
 import { VersusSession } from '../net/session';
-import type { BrokerConfig } from '../net/peer';
+// ?broker=wss://… overrides the relay (testing hook)
 
 export class VersusPanel {
   private readonly root: HTMLElement;
@@ -14,7 +14,7 @@ export class VersusPanel {
   private readonly statusEl: HTMLElement;
   private session: VersusSession | null = null;
   /** e2e hook: ?broker=host:port:key forces a local PeerServer */
-  private readonly broker: BrokerConfig | undefined;
+  private readonly brokerUrl: string | undefined;
 
   constructor(
     private readonly myCarId: string,
@@ -26,11 +26,7 @@ export class VersusPanel {
     this.codeEl = document.getElementById('vsCode')!;
     this.joinInput = document.getElementById('vsJoinInput') as HTMLInputElement;
     this.statusEl = document.getElementById('vsStatus')!;
-    const b = new URLSearchParams(location.search).get('broker');
-    if (b) {
-      const [host, port, key] = b.split(':');
-      this.broker = { host, port: Number(port) || 9000, key: key || 'peerjs', path: '/', secure: false };
-    }
+    this.brokerUrl = new URLSearchParams(location.search).get('broker') ?? undefined;
     document.getElementById('btnVsCreate')!.addEventListener('click', () => void this.create());
     document.getElementById('btnVsJoin')!.addEventListener('click', () => void this.join());
     document.getElementById('btnVsBack')!.addEventListener('click', () => this.close());
@@ -84,11 +80,11 @@ export class VersusPanel {
     this.setCode('· · · · ·');
     this.setStatus('contacting the matchmaker…');
     try {
-      const session = await VersusSession.host(genCode(Math.random), this.broker);
+      const session = await VersusSession.host(genCode(Math.random), this.brokerUrl);
       session.myCarId = this.myCarId;
       this.adopt(session);
     } catch {
-      this.setStatus('could not reach the matchmaker — try again');
+      this.setStatus('could not reach the relay — check your connection and try again');
     }
   }
 
@@ -102,11 +98,11 @@ export class VersusPanel {
     }
     this.setStatus('joining ' + code + '…');
     try {
-      const session = await VersusSession.join(code, this.broker);
+      const session = await VersusSession.join(code, this.brokerUrl);
       session.myCarId = this.myCarId;
       this.adopt(session);
     } catch {
-      this.setStatus('could not reach the matchmaker — try again');
+      this.setStatus('could not reach the relay — check your connection and try again');
     }
   }
 

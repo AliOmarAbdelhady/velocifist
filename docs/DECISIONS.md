@@ -216,3 +216,13 @@ M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determi
 5. **UI:** VERSUS section (create/join, code display, status, ping); synced 3-2-1-GO countdown driven by the host's start message; HUD gap (+/- metres) and position; versus results screen (WIN/LOSS + margin + rematch — host re-seeds) and leave.
 
 **Consequences.** No server to run or pay for; if the PeerJS cloud is down, Versus shows a clear error and solo play is untouched. Unit tests cover code generation, the race state machine (countdown/win/loss/disconnect/gap) and the protocol roundtrip; e2e-m19 runs a full two-browser race against a LOCAL PeerServer (`peer` devDep) so CI proves the flow without the internet broker.
+
+---
+
+## ADR-018 amendment — transport replaced: public MQTT relay instead of WebRTC (2026-09-23, user directive "i dont want them to be on the same wifi")
+
+**Context.** Field test: host stuck at "share your code", guest stuck at "dialing the host…" — both reached the PeerJS broker, but the DataChannel never formed (STUN cannot traverse CGNAT/symmetric-NAT pairs; the free OpenRelay TURN credentials turned out to allocate ZERO relay candidates — verified with a relay-only ICE probe — so the shipped TURN config was inert). Cross-network versus must work ALWAYS, not "when NATs allow".
+
+**Decision.** Replace WebRTC/PeerJS with **MQTT over secure WebSocket through public anonymous brokers** (broker.emqx.io primary, broker.hivemq.com fallback), `mqtt.js` lazy-loaded only when Versus opens. Topics `roben-race/v1/<CODE>/a|b`; presence is app-level: guest repeats hello every 1 s until the host's start (self-healing), ping/pong at 1 Hz, Last-Will publishes bye on ungraceful death, the 6 s silence guard settles races. A 20 s join timeout reports "no match with that code". Measured broker latency ~100 ms publish→deliver.
+
+**Consequences.** No NAT traversal exists to fail — versus works on any pair of networks, which is the requirement. Latency is relay-grade (fine for ghost poses; the opponent is advisory, never physical). Public brokers are anonymous shared infrastructure: codes are unguessable (31⁵) but not cryptographic — accepted for an arcade 1v1. e2e-m19 now exercises the REAL production relay end to end.

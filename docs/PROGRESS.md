@@ -218,3 +218,9 @@
 - Fixes: TURN relays added (free OpenRelay + Google/Twilio STUN, iceCandidatePoolSize 4); 20 s dial timeout that fails with an actionable message instead of hanging; every peer error now fails loudly (failOut kills the link + tells the user) and logs `[versus] peer error: <type>` to the console; create/join retry works after a dead session (was silently blocked); host gets a "still waiting — keep this tab in the foreground" hint after 45 s; results overlays scroll on short screens.
 - Verification: 250/253 tests; build green; e2e-m19 full match green again (code → countdown → race → VICTORY/DEFEAT → rematch → disconnect win, 0 console errors) with hardened timeouts + cleanup.
 - Docs: PILLs 120–121.
+
+### Session 21 (2026-09-23, M19b) — versus rides public MQTT relays (works on ANY two networks)
+- User directive: versus must NOT require same WiFi. Diagnosed: OpenRelay TURN credentials allocate zero relay candidates (relay-only ICE probe) — the previous hotfix was inert; STUN-only WebRTC cannot cross CGNAT pairs.
+- Transport replaced: MQTT-over-WSS via public anonymous brokers (emqx + hivemq fallback), mqtt.js lazy chunk (~340 kB, solo payload untouched); peerjs/peer deps removed. Topics per match code; hello repeat (1 Hz) until start; LWT bye; 20 s join timeout ("no match with that code"); ping/pong at 1 Hz.
+- Verification: 250/253 tests; build green; **e2e-m19 now runs the full two-browser match through the REAL public relay** (code → countdown → race → VICTORY/DEFEAT → rematch → disconnect win, 0 console errors).
+- Docs: ADR-018 amendment, PILL 122, README, SW cache roben-v3.
