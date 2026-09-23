@@ -172,3 +172,47 @@ M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determi
 3. **Escalating density (replaces ADR-008's flat-after-4-min curve):** warm-up 8→10 veh/km/lane over 4 minutes, then **+1 per minute forever**, capped at 24 by the agent pool. The longer the run, the denser the weave.
 
 **Consequences.** Passing becomes a duel: you fake left, they blink and close the door, you cut back right. The fairness soak runs WITH rivals armed and still probes zero no-escape states across 60 sim-minutes — the block is one lane, one rival, with a warning blinker, so an escape always exists. Kill pacing remains retired; difficulty now comes from density and rivals, not from unfair walls.
+
+---
+
+## ADR-016 — 200 km/h regime, meaner rivals, readability pass (M17)
+
+**Context.** User directive: "add the speed to be 200 km/h… make the game harder a little bit and the cars trying to stop me from passing… the road to be more clear and appear better… the car look more real". The third cap bump (80→120→150→200) plus a difficulty and readability pass.
+
+**Decision.**
+1. **Cruise cap 200 km/h** (55.6 m/s; Bruto 186.7 → 51.9). Pyramid rescaled ×1.333: traffic families 21.3–41.3 m/s (77–149 km/h), spawn window 170–460 m (~3–8 s at the new closings), events ×1.33 placed 460–640 m ahead, speed lines from ~115 km/h, `targetBrake` re-measured (brake from vCruise−1), turn-radius bound re-derived v²/a ≈ 158 m at 2 g. Road bends need NO flattening: chunk curvature keeps R ≥ ~740 m while full-lock at 200 needs only ~158 m.
+2. **Meaner rivals:** fraction 30%→45% of eligible same-direction cars; cooldown 5–9 s → 3–6 s; concurrent block cuts ≤2 → ≤3; defensive pacing to family vMax ×1.15 → ×1.30; trigger band 8–90 m → 8–110 m. The readability contract stays: 1 s blinker before every cut, lane-gap checks, no rivals in buses/trucks/event cars.
+3. **Escalation faster:** warm-up 8→11 veh/km/lane over 3 min (was 8→10 over 4), then +1 per 45 s (was 60), ceiling 26 (was 24); agent pool 48→56.
+4. **Readability:** marking texture redrawn (wider/brighter edge lines, brighter dashes, less speckle over lines); white delineator posts with reflector bands every 24 m on both shoulders; road ribbon AHEAD 760→920 m; fog far +100–140 m per theme.
+5. **Car realism:** clearcoat paint (MeshPhysicalMaterial), front splitter, rear vents, 10-spoke rims, richer nose taper on profiles.
+
+**Consequences.** The fairness invariant is unchanged and the soak must still probe 0 no-escape states with rivals armed at the new speeds — the spawner simply rejects harder (bigger brake envelopes at 30+ m/s closings). Difficulty rises from speed, density and rival pressure, never from unfair walls.
+
+---
+
+## ADR-017 — RobEn rebrand: ROBEN VELOCIFIST for roben.club (M18)
+
+**Context.** User directive: "rebrand the game to be made for roben.club… view the website and take the logo and rebrand the car to look like roben". roben.club is the RobEn Club (AAST Cairo, robotics/AI/UAV/racing teams, "Design Your Future"). Its mark: wordmark "RobEn" where the "o" is a robot head (ring + blue eyes + antenna), framed by PCB circuit traces; palette azure #19699D, letter gray #676767, pale slate #8CA3C5 on white; the icon variant is the white robot head on a navy→azure radial-gradient rounded tile.
+
+**Decision.**
+1. **Name:** the game is **ROBEN VELOCIFIST**, subtitled "by RobEn Club · roben.club". Repo name and Pages URL stay `velocifist` (renaming the repo breaks the live URL; not asked).
+2. **Mark recreated as hand-authored SVG** (favicon + PWA icons + overlay logo + in-game livery) — faithful to the recipe: robot-head "o", "R/b" hollow gray + "E/n" solid azure treatment simplified to a game-legible azure/white lockup where tiny sizes demand it; circuit-trace accents on the overlay version only. PNG PWA icons rasterized from the SVG at build time (headless Chrome screenshot), committed.
+3. **Palette:** UI accents move from orange #ff5a1f to RobEn azure #19699D with teal #20c997 highlights (score gold #ffb01f kept for game pop). PWA theme/background and manifest renamed; SW cache name bumped (forces one clean refetch).
+4. **Livery:** player cars get RobEn azure paint with white centre stripes, a robot-head roundel decal on the hood and "RobEn" on the rear wing/ducktail (canvas texture, per-archetype placement). Traffic cars keep their palette.
+
+**Consequences.** Zero new runtime deps; one-time icon generation committed to the repo. The orange was load-bearing in ~15 CSS rules — all replaced by the two RobEn accents. Nothing about gameplay changes in this ADR.
+
+---
+
+## ADR-018 — Versus multiplayer: invite-code 1v1 ghost race (M19)
+
+**Context.** User directive: "add a multiplayer… invite another player and send him a code and when he enter it we can play verses each other". The site is static (GitHub Pages); there is no server of our own. The phone-remote relay is LAN-only and cannot carry an internet opponent.
+
+**Decision.**
+1. **Transport:** WebRTC DataChannel via `peerjs` (new dependency, dynamically imported ONLY when the Versus panel opens — solo boot payload unchanged). Signaling through the free PeerJS cloud broker; game traffic is then peer-to-peer.
+2. **Match codes:** host generates a 5-char code from the unambiguous alphabet `23456789ABCDEFGHJKMNPQRSTUVWXYZ` and claims peer id `roben-race-<CODE>`; the guest connects to that id. UX: CREATE shows the code + "share it"; JOIN takes the code.
+3. **Race model — ghost race on identical seeds:** the host owns the seed + start; on connect it sends `{seed, target}`; both clients run their own fully-local sims (same traffic seed → same world). Each sends `{x, z, heading, u, distance}` at 15 Hz; the opponent renders as a translucent azure ghost car with NO collision (classic time-trial-ghost semantics; each player weaves their own traffic). **First to 5,000 m wins** (~90 s at 200 km/h); wrecking = instant loss; disconnect mid-race = the other player wins.
+4. **Determinism scope:** worlds are seeded identically but the sims legitimately diverge (traffic reacts to each player) — accepted by design; the ghost shows where the opponent IS, not a promise of identical traffic around them.
+5. **UI:** VERSUS section (create/join, code display, status, ping); synced 3-2-1-GO countdown driven by the host's start message; HUD gap (+/- metres) and position; versus results screen (WIN/LOSS + margin + rematch — host re-seeds) and leave.
+
+**Consequences.** No server to run or pay for; if the PeerJS cloud is down, Versus shows a clear error and solo play is untouched. Unit tests cover code generation, the race state machine (countdown/win/loss/disconnect/gap) and the protocol roundtrip; e2e-m19 runs a full two-browser race against a LOCAL PeerServer (`peer` devDep) so CI proves the flow without the internet broker.

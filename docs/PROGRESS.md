@@ -189,3 +189,11 @@
 - Density escalates: 8→10 over 4 min, then +1/min forever, ceiling 24 (agent pool).
 - Verification: 229/229 tests (3 rival gates + escalation curve); soak 0 violations WITH rivals; build green; e2e m6/m11/m12 green; 0 console errors.
 - Docs: ADR-015, PILLs 105–107, PLAN v2.1.
+
+### Session 17 (2026-09-23, M17) — 200 km/h, meaner rivals, readability (ADR-016)
+- Cruise cap 200/200/187 km/h; traffic families ×4/3 (77–149 km/h), spawn window 170–460 m, pool 56; events ×1.33 placed 460–640 m; speed lines from ~115 km/h; brake targets re-measured (108/108/92 m from 196 km/h); turn-radius bound 210 m (measured 199).
+- Meaner traffic: rivals 45% of eligible cars, cooldown 3–6 s, ≤3 concurrent cuts, defensive pacing ×1.30, band 110 m; density 8→11 over 3 min then +1/45 s, ceiling 26.
+- Readability: brighter/wider lane markings with long dashes, delineator reflector posts every 24 m, road draw 760→920 m, camera far 1300, fog pushed out (+100–140 m far per theme), neon asphalt/rails brighter.
+- Car realism: clearcoat paint (MeshPhysicalMaterial), front splitter, rear-deck vents, side blades, 10-spoke rims.
+- Verification: 238/238 tests (gates re-derived: plateau −1.8, g ≤ 2.6, radius ≤ 210, density curve); build green; e2e m6/m11/m12 green — plateau 196 km/h @ gear 7, 77% hold, coast 196→188; 0 console errors.
+- Docs: ADR-016, PILLs 110–112, PLAN v3.0.

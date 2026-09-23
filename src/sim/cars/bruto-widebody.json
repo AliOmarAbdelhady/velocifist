@@ -12,7 +12,7 @@
   "stiffB": 7,
   "stiffC": 1.2,
   "deltaMax": 0.62,
-  "steerRate": 4.0,
+  "steerRate": 4,
   "powerW": 345000,
   "launchForce": 15000,
   "driveSplitFront": 0.25,
@@ -23,7 +23,7 @@
   "brakeSplitFront": 0.63,
   "roadHalfWidth": 11,
   "healthMax": 130,
-  "targetBrake": 51.4,
+  "targetBrake": 91.9,
   "bodyDims": [
     2.14,
     1.16,
@@ -31,6 +31,6 @@
   ],
   "color": 2896184,
   "downforce": 0.35,
-  "vCruise": 38.9,
+  "vCruise": 51.94,
   "targetCruise": 2.3
 }

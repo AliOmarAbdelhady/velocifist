@@ -56,8 +56,8 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
 
   it('brakes from cruise to 0 within ±15% of its target distance', () => {
     const c = new Car(tune);
-    expect(accelTo(c, tune.vCruise - 1)).toBe(true); // outside the limiter's dead band
-    const from = tune.vCruise - 1;
+    expect(accelTo(c, tune.vCruise - 1.8)).toBe(true); // outside the limiter's dead band (gap ~2% at the 200 cap, PILL 107)
+    const from = tune.vCruise - 1.8;
     let zStart = 0;
     let started = false;
     let dist = -1;
@@ -82,7 +82,7 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
 
   it('corners on rails at ~2 g (ADR-013 grip governor, full lock, wide pad)', () => {
     const c = new Car(wideRoad(tune));
-    expect(accelTo(c, tune.vCruise - 0.7)).toBe(true);
+    expect(accelTo(c, tune.vCruise - 1.8)).toBe(true);
     run(c, () => IDLE, 0.5);
     let maxG = 0;
     run(c, () => ({ steer: 1, throttle: 0, brake: 0 }), 1.5, (cc) => {
@@ -90,7 +90,7 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
     });
     // supercar glue: well past road-car grip, and CAPPED by the governor
     expect(maxG).toBeGreaterThanOrEqual(1.5);
-    expect(maxG).toBeLessThanOrEqual(2.3);
+    expect(maxG).toBeLessThanOrEqual(2.6); // ADR-016: downforce cars peak higher at the 200 cap (Bruto 0.35 → ~2.5 g transient)
   });
 
   it('step-steer yaw response settles without twitch (wide pad, overshoot < 1.4)', () => {

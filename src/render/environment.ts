@@ -39,7 +39,7 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     id: 'coastal',
     name: 'Coastal Sunset Highway',
     sky: { horizon: 0xffb06e, mid: 0x9a6b8f, zenith: 0x35406e, sunDir: [-0.62, 0.17, -0.72], sunColor: 0xffd9a8, sunI: 1.0, stars: false },
-    fog: { color: 0xf2b48a, near: 90, far: 430 },
+    fog: { color: 0xf2b48a, near: 120, far: 560 },
     hemi: { sky: 0xffd0a8, ground: 0x54455e, intensity: 0.85 },
     sun: { color: 0xffc98a, intensity: 2.1 },
     ground: 0x5b4a4a,
@@ -50,17 +50,17 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     id: 'neon',
     name: 'Neon Night City',
     sky: { horizon: 0x2b1e4d, mid: 0x131a33, zenith: 0x05060f, sunDir: [0.3, 0.55, -0.4], sunColor: 0xcfe0ff, sunI: 0.3, stars: true },
-    fog: { color: 0x0d1024, near: 40, far: 360 },
+    fog: { color: 0x0d1024, near: 70, far: 470 },
     hemi: { sky: 0x33406e, ground: 0x1a1030, intensity: 0.5 },
     sun: { color: 0xb9c8ff, intensity: 0.5 },
     ground: 0x10131f,
-    road: { asphaltTint: 0x9aa4c0, roughness: 0.38, metalness: 0.12, railColor: 0x74808f },
+    road: { asphaltTint: 0xa8b2cc, roughness: 0.38, metalness: 0.12, railColor: 0x87929f },
   },
   desert: {
     id: 'desert',
     name: 'Desert Canyon Pass',
     sky: { horizon: 0xe8d9a8, mid: 0x7fb2e6, zenith: 0x3f7fd6, sunDir: [0.25, 0.9, -0.35], sunColor: 0xfffbe8, sunI: 1.2, stars: false },
-    fog: { color: 0xe6d7b0, near: 110, far: 470 },
+    fog: { color: 0xe6d7b0, near: 150, far: 610 },
     hemi: { sky: 0xcfe4ff, ground: 0xa8895f, intensity: 1.0 },
     sun: { color: 0xfff3d0, intensity: 2.6 },
     ground: 0xc9a86a,
@@ -214,7 +214,7 @@ interface Pool {
 }
 
 const PROP_WINDOW_BEHIND = 160;
-const PROP_WINDOW_AHEAD = 760;
+const PROP_WINDOW_AHEAD = 920; // matches the road ribbon (ADR-016)
 
 export class EnvironmentRenderer {
   readonly group = new THREE.Group();

@@ -132,14 +132,14 @@ function spokeRimTexture(): THREE.Texture {
   g.fillStyle = '#0c0d10';
   g.fillRect(0, 0, 128, 128);
   g.translate(64, 64);
-  for (let i = 0; i < 5; i++) {
-    g.rotate((Math.PI * 2) / 5);
+  for (let i = 0; i < 10; i++) {
+    g.rotate((Math.PI * 2) / 10);
     g.fillStyle = '#b9bdc4';
     g.beginPath();
-    g.moveTo(-7, 0);
-    g.lineTo(-4, -58);
-    g.lineTo(4, -58);
-    g.lineTo(7, 0);
+    g.moveTo(-5, 0);
+    g.lineTo(-3.2, -58);
+    g.lineTo(3.2, -58);
+    g.lineTo(5, 0);
     g.closePath();
     g.fill();
   }
@@ -185,7 +185,7 @@ export class CarView {
   private wobbleT = 0;
   private materials: THREE.Material[] = [];
   private geometries: THREE.BufferGeometry[] = [];
-  private paintMat!: THREE.MeshStandardMaterial;
+  private paintMat!: THREE.MeshPhysicalMaterial;
   private headMat!: THREE.MeshStandardMaterial;
   private tailMat!: THREE.MeshStandardMaterial;
   private night = false;
@@ -220,11 +220,15 @@ export class CarView {
       duck.translate(0, h * 0.84, l * 0.44);
       paintParts.push(duck);
     }
-    this.paintMat = new THREE.MeshStandardMaterial({
+    this.paintMat = new THREE.MeshPhysicalMaterial({
       color: this.baseColor.clone(),
       roughness: this.visual.rough,
-      metalness: 0.72,
-      envMapIntensity: 1.15,
+      metalness: 0.6,
+      envMapIntensity: 1.2,
+      // ADR-016 realism: clearcoat = the wet-look lacquer layer real car
+      // paint has; costs one BRDF branch, sells the "supercar" instantly
+      clearcoat: 1,
+      clearcoatRoughness: 0.06,
     });
     const paintMesh = new THREE.Mesh(mergeMix(paintParts), this.paintMat);
     this.bodyGroup.add(paintMesh);
@@ -239,7 +243,18 @@ export class CarView {
     const diffuser = new THREE.BoxGeometry(w * 0.9, 0.14, 0.3);
     diffuser.translate(0, 0.16, l * 0.46);
     trimParts.push(diffuser);
+    // ADR-016 realism: front splitter blade + rear-deck vents + side blades
+    const splitter = new THREE.BoxGeometry(w * 0.92, 0.05, 0.42);
+    splitter.translate(0, 0.08, -l * 0.48);
+    trimParts.push(splitter);
     for (const sx of [-1, 1]) {
+      const vent = new THREE.BoxGeometry(0.3, 0.05, 0.26);
+      vent.rotateX(-0.15);
+      vent.translate(sx * w * 0.3, h * 0.8, l * 0.3);
+      trimParts.push(vent);
+      const blade = new THREE.BoxGeometry(0.05, 0.13, l * 0.3);
+      blade.translate(sx * (w / 2 - 0.01), 0.3, l * 0.08);
+      trimParts.push(blade);
       const mirror = new THREE.BoxGeometry(0.16, 0.05, 0.07);
       mirror.translate(sx * (w * 0.5 + 0.05), h * 0.72, -l * 0.06);
       trimParts.push(mirror);

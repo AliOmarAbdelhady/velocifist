@@ -11,14 +11,14 @@ const clamp = (v: number, lo: number, hi: number): number =>
   v < lo ? lo : v > hi ? hi : v;
 
 /**
- * ESCALATING density (ADR-015, user directive): base 8 veh/km/lane with a
- * gentle 4-minute warm-up (+2), then the road keeps FILLING — +1 per minute,
- * capped at 24 (the agent-pool ceiling for the spawn window). The longer you
+ * ESCALATING density (ADR-015/016, user directive): base 8 veh/km/lane with a
+ * 3-minute warm-up (+3), then the road keeps FILLING — +1 per 45 s, capped
+ * at 26 (the agent-pool ceiling for the spawn window). The longer you
  * drive, the denser the weave.
  */
 export function densityAt(tSec: number, base = 8): number {
-  const warm = base + 2 * Math.pow(Math.min(tSec / 240, 1), 1.25);
-  return Math.min(24, warm + Math.max(0, (tSec - 240) / 60));
+  const warm = base + 3 * Math.pow(Math.min(tSec / 180, 1), 1.25);
+  return Math.min(26, warm + Math.max(0, (tSec - 180) / 45));
 }
 
 /** Event period — 40 s early → 24 s late (M7 injectors consume it). */

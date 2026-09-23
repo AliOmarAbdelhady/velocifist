@@ -56,7 +56,7 @@ describe('ADR-013 handling contract — no slides, no spins', () => {
     c.u = tune.vCruise;
     for (let i = 0; i < 90; i++) c.step(DT, { steer: 1, throttle: 1, brake: 0 });
     const r = Math.abs(c.u) / Math.max(0.05, Math.abs(c.omega));
-    expect(r).toBeLessThan(130); // ≈2 g at the 150 km/h cap (ADR-015)
+    expect(r).toBeLessThan(210); // ≈1.5–2 g at the 200 km/h cap (ADR-016): v²/a grows ∝ v²
     expect(r).toBeGreaterThan(40); // but still a car, not a carousel
   });
 });

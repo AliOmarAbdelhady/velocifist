@@ -58,6 +58,11 @@ const gear = await page.evaluate(() => document.getElementById('hudGear').textCo
 console.log(`CRUISE: peak ${max} km/h · last 10 s ${tailMin}–${tailMax} km/h · gear ${gear}`);
 
 // ---- release: coasting decays (gas is what holds the speed) ----
+// ADR-016: at 200 km/h with meaner traffic a BLIND full-gas bot crashes and
+// crawls — dips are correct behaviour. Decay is measured from the last
+// PLATEAU sample (≥180), not from whatever crash valley the bot is in.
+const hiTail = samples.slice(-10).filter((v) => v >= 180);
+const v0 = hiTail.length ? Math.max(...hiTail) : max;
 await page.keyboard.up('w');
 await page.waitForTimeout(5000);
 const coast = Number(await page.evaluate(() => document.getElementById('hudKmh').textContent));
@@ -74,8 +79,10 @@ await browser.close();
 
 // on a populated road the assist brakes behind slower traffic and full gas
 // climbs back — dips are CORRECT; the cap is what must hold
+const holdFrac = samples.filter((v) => v >= 180).length / samples.length;
+console.log(`HOLD: ${Math.round(holdFrac * 100)}% of samples ≥ 180 km/h · decay ${v0}→${coast} km/h`);
 const pass =
-  early.cars >= 5 && max >= 140 && max <= 151 && tailMax <= 151 && tailMax >= 135 &&
-  coast <= tailMin + 1 && thr0 && errors.length === 0;
+  early.cars >= 5 && max >= 190 && max <= 201.5 && tailMax <= 201.5 &&
+  holdFrac >= 0.4 && coast <= v0 - 5 && thr0 && errors.length === 0;
 console.log(pass ? 'E2E M11 OK' : 'E2E M11 FAILED');
 process.exit(pass ? 0 : 1);

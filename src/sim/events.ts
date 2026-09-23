@@ -111,10 +111,10 @@ export class EventDirector {
   ): boolean {
     const laneCount = traffic.laneCount;
     // find a spawn s with a usable same-direction half (≥ 2 lanes)
-    let s0 = player.s + 340 + this.rng() * 120; // ADR-015: 150 km/h pace placement
+    let s0 = player.s + 460 + this.rng() * 180; // ADR-016: 200 km/h pace placement
     let lanes = this.sameDirLanes(road, s0, laneCount);
     if (lanes.length < 2) {
-      s0 += 90;
+      s0 += 120;
       lanes = this.sameDirLanes(road, s0, laneCount);
       if (lanes.length < 2) return false;
     }
@@ -164,7 +164,7 @@ export class EventDirector {
       if (!lanes.includes(free)) continue;
       const specs = lanes
         .filter((l) => l !== free)
-        .map((l) => ({ lane: l, s: s0, family: 1, speed: 24 }));
+        .map((l) => ({ lane: l, s: s0, family: 1, speed: 32 }));
       if (this.placeBatch(traffic, player, specs).length > 0) return true;
     }
     return false;
@@ -181,7 +181,7 @@ export class EventDirector {
     const families = [1, 3, 1, 2];
     const specs = [];
     for (let i = 0; i < n; i++) {
-      specs.push({ lane, s: s0 - i * 30, family: families[i % families.length], speed: 25 });
+      specs.push({ lane, s: s0 - i * 40, family: families[i % families.length], speed: 33.3 });
     }
     return this.placeBatch(traffic, player, specs).length > 0;
   }
@@ -195,8 +195,8 @@ export class EventDirector {
     const lane = options[Math.floor(this.rng() * options.length)];
     return (
       this.placeBatch(traffic, player, [
-        { lane, s: s0, family: 6, speed: 19 },
-        { lane, s: s0 - 36, family: 6, speed: 19 },
+        { lane, s: s0, family: 6, speed: 25.3 },
+        { lane, s: s0 - 36, family: 6, speed: 25.3 },
       ]).length > 0
     );
   }
@@ -216,8 +216,8 @@ export class EventDirector {
     });
     for (const [l1, l2] of pairs) {
       const specs = [
-        { lane: l1, s: s0, family: 1, speed: 12.5 },
-        { lane: l2, s: s0, family: 4, speed: 12.5 },
+        { lane: l1, s: s0, family: 1, speed: 16.7 },
+        { lane: l2, s: s0, family: 4, speed: 16.7 },
       ];
       if (this.placeBatch(traffic, player, specs).length > 0) return true;
     }
@@ -235,7 +235,7 @@ export class EventDirector {
     if (!lanes.includes(side)) return false;
     return (
       this.placeBatch(traffic, player, [
-        { lane: side, s: s0, family: 2, speed: 26, signal: (playerLane - side) as -1 | 1, laneTo: playerLane },
+        { lane: side, s: s0, family: 2, speed: 34.7, signal: (playerLane - side) as -1 | 1, laneTo: playerLane },
       ]).length > 0
     );
   }
@@ -249,7 +249,7 @@ export class EventDirector {
     const pool = interior.length > 0 ? interior : lanes.filter((l) => l !== playerLane);
     if (pool.length === 0) return false;
     const lane = pool[Math.floor(this.rng() * pool.length)];
-    const placed = this.placeBatch(traffic, player, [{ lane, s: s0, family: 1, speed: 24 }]);
+    const placed = this.placeBatch(traffic, player, [{ lane, s: s0, family: 1, speed: 32 }]);
     if (placed.length === 0) return false;
     const a = placed[0];
     this.weavers.push({ agent: a, id: a.id, timer: 1.5 });

@@ -110,7 +110,7 @@ export class GameScene {
       50,
       window.innerWidth / window.innerHeight,
       0.3,
-      1000,
+      1300, // ADR-016: road draws to 920 m (sky sphere at 1400 stays clipped; horizon = fog color)
     );
     this.scene.add(this.camera); // camera hosts the speed-line streaks
     this.fx.attach(this.camera);

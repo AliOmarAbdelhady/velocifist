@@ -320,7 +320,7 @@ export class TrafficSystem {
     slot.state = 'CRUISE';
     slot.signal = 0;
     slot.signalTimer = 0;
-    slot.rival = dir > 0 && f <= 4 && this.rng() < 0.3; // ADR-015
+    slot.rival = dir > 0 && f <= 4 && this.rng() < 0.45; // ADR-015/016
     slot.rivalCd = this.rng() * 2;
     slot.cruiseSpeed = slot.speed;
     slot.changeTimer = 0;
@@ -407,12 +407,12 @@ export class TrafficSystem {
           a.laneTo = target;
         }
       }
-      // ---- ADR-015 rival brain: this car defends its position ----
+      // ---- ADR-015/016 rival brain: this car defends its position ----
       if (a.rival && a.dir > 0) {
         a.rivalCd -= dt;
         const dsp = a.s - this.playerS;
         const onc2 = this.road.oncomingAt(a.s);
-        const inBand = dsp > 8 && dsp < 90 && a.lane >= onc2;
+        const inBand = dsp > 8 && dsp < 110 && a.lane >= onc2;
         if (inBand) {
           // where is the player HEADING? project the lateral drift forward
           const projLane = this.playerLane(this.playerLat + this.playerLatVel * 0.8);
@@ -423,19 +423,19 @@ export class TrafficSystem {
             projLane < this.cfg.laneCount &&
             a.rivalCd <= 0 &&
             !this.road.laneBlocked(a.s + 60, projLane) &&
-            this.rivalCutsActive() < 2 &&
+            this.rivalCutsActive() < 3 &&
             this.laneGapFree(a, projLane)
           ) {
             // blinker first — the cut is readable and dodgeable (1 s warning)
             a.signal = (projLane - a.lane) as -1 | 1;
             a.signalTimer = 0;
             a.laneTo = projLane;
-            a.rivalCd = 5 + this.rng() * 4;
+            a.rivalCd = 3 + this.rng() * 3;
           }
           // defensive pacing: don't roll over when the player sits behind
-          if (dsp < 60 && this.playerLane(this.playerLat) === a.lane) {
+          if (dsp < 70 && this.playerLane(this.playerLat) === a.lane) {
             a.desiredSpeed = Math.min(
-              FAMILIES[a.family].vMax * 1.15,
+              FAMILIES[a.family].vMax * 1.3,
               a.desiredSpeed + 2 * dt,
             );
           }

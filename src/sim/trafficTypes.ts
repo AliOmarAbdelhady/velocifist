@@ -30,15 +30,18 @@ export interface FamilyDef {
   massRatio: number;
 }
 
-/** Seven families with distinct sizes, speeds and habits (PLAN §8). */
+/** Seven families with distinct sizes, speeds and habits (PLAN §8).
+ *  ADR-016: ×4/3 of the 150-regime band — the 200 km/h player closes at
+ *  14–34 m/s on same-direction traffic, which is the "harder" the user
+ *  asked for (plus meaner rivals, see traffic.ts). */
 export const FAMILIES: readonly FamilyDef[] = [
-  { id: 'compact', halfW: 0.85, halfL: 1.9, vMin: 22.5, vMax: 28.12, aMax: 1.8, bComfort: 2.2, headwayT: 1.4, s0: 2.2, laneChangeEagerness: 0.5, massRatio: 0.7 },
-  { id: 'sedan', halfW: 0.92, halfL: 2.3, vMin: 21.56, vMax: 27.19, aMax: 1.6, bComfort: 2.2, headwayT: 1.5, s0: 2.4, laneChangeEagerness: 0.45, massRatio: 1.0 },
-  { id: 'sports', halfW: 0.95, halfL: 2.2, vMin: 25.31, vMax: 30.94, aMax: 2.4, bComfort: 2.6, headwayT: 1.2, s0: 2.2, laneChangeEagerness: 0.6, massRatio: 0.9 },
-  { id: 'suv', halfW: 1.02, halfL: 2.5, vMin: 20.62, vMax: 25.31, aMax: 1.4, bComfort: 2.0, headwayT: 1.6, s0: 2.6, laneChangeEagerness: 0.35, massRatio: 1.3 },
-  { id: 'van', halfW: 1.05, halfL: 2.7, vMin: 19.69, vMax: 23.44, aMax: 1.2, bComfort: 1.9, headwayT: 1.7, s0: 2.8, laneChangeEagerness: 0.25, massRatio: 1.4 },
-  { id: 'bus', halfW: 1.3, halfL: 6.0, vMin: 16.88, vMax: 20.62, aMax: 0.9, bComfort: 1.6, headwayT: 2.0, s0: 3.2, laneChangeEagerness: 0.08, massRatio: 2.6 },
-  { id: 'truck', halfW: 1.25, halfL: 5.4, vMin: 15.94, vMax: 19.69, aMax: 0.8, bComfort: 1.5, headwayT: 2.2, s0: 3.4, laneChangeEagerness: 0.06, massRatio: 3.0 },
+  { id: 'compact', halfW: 0.85, halfL: 1.9, vMin: 30.0, vMax: 37.49, aMax: 1.8, bComfort: 2.2, headwayT: 1.4, s0: 2.2, laneChangeEagerness: 0.5, massRatio: 0.7 },
+  { id: 'sedan', halfW: 0.92, halfL: 2.3, vMin: 28.75, vMax: 36.25, aMax: 1.6, bComfort: 2.2, headwayT: 1.5, s0: 2.4, laneChangeEagerness: 0.45, massRatio: 1.0 },
+  { id: 'sports', halfW: 0.95, halfL: 2.2, vMin: 33.75, vMax: 41.25, aMax: 2.4, bComfort: 2.6, headwayT: 1.2, s0: 2.2, laneChangeEagerness: 0.6, massRatio: 0.9 },
+  { id: 'suv', halfW: 1.02, halfL: 2.5, vMin: 27.5, vMax: 33.75, aMax: 1.4, bComfort: 2.0, headwayT: 1.6, s0: 2.6, laneChangeEagerness: 0.35, massRatio: 1.3 },
+  { id: 'van', halfW: 1.05, halfL: 2.7, vMin: 26.25, vMax: 31.25, aMax: 1.2, bComfort: 1.9, headwayT: 1.7, s0: 2.8, laneChangeEagerness: 0.25, massRatio: 1.4 },
+  { id: 'bus', halfW: 1.3, halfL: 6.0, vMin: 22.5, vMax: 27.5, aMax: 0.9, bComfort: 1.6, headwayT: 2.0, s0: 3.2, laneChangeEagerness: 0.08, massRatio: 2.6 },
+  { id: 'truck', halfW: 1.25, halfL: 5.4, vMin: 21.25, vMax: 26.25, aMax: 0.8, bComfort: 1.5, headwayT: 2.2, s0: 3.4, laneChangeEagerness: 0.06, massRatio: 3.0 },
 ];
 
 /** Pool slot: `active` agents are simulated + rendered.
@@ -142,9 +145,11 @@ export const DEFAULT_TRAFFIC_CONFIG: TrafficConfig = {
   // EASY (ADR-008/012): relaxed-but-full density — traffic is present from
   // the first frame (warmup) and the director only nudges this, gently
   densityPerKmPerLane: 8,
-  spawnAheadMin: 110,
-  spawnAheadMax: 300,
-  despawnBehind: 80,
-  maxAgents: 48,
+  // ADR-016: 200 km/h pace — the window gives ~3–8 s of warning at the new
+  // closing speeds (14–34 m/s on same-direction traffic)
+  spawnAheadMin: 170,
+  spawnAheadMax: 460,
+  despawnBehind: 110,
+  maxAgents: 56,
   seed: 12345,
 };

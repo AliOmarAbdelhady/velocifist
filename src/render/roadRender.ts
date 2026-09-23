@@ -13,12 +13,14 @@ import * as THREE from 'three';
 import { RoadSystem, CHUNK_LEN, type SpinePoint } from '../sim/road';
 
 const ROW_STEP = 8;
-const BEHIND = 120;
-const AHEAD = 760;
-const MAX_ROWS = 148; // 110 base rows + zone-boundary duplicates + slack
+const BEHIND = 140;
+const AHEAD = 920;
+const MAX_ROWS = 176; // 132 base rows + zone-boundary duplicates + slack
 const COLS = 5; // lat: [-E, -R, 0, +R, +E]
 const RAIL_SEG = 4.4;
-const RAIL_POOL = 420;
+const RAIL_POOL = 520; // (920+140)/4.4 × 2 sides + slack
+const POST_SEG = 24; // delineator spacing (ADR-016 readability)
+const POST_POOL = 96;
 const Y = 0.02;
 
 // reused (no per-frame allocation)
@@ -35,6 +37,8 @@ export interface RoadLook {
 export function makeMarkingsTexture(): THREE.CanvasTexture {
   // 512×128: two cross-section variants side by side (same-dir | oncoming).
   // Drawn bright-on-dark so material.color tints per theme.
+  // ADR-016 readability: brighter/wider edge lines, longer dashes, less
+  // speckle — the lines must read at 200 km/h from 400 m out.
   const c = document.createElement('canvas');
   c.width = 512;
   c.height = 128;
@@ -43,15 +47,15 @@ export function makeMarkingsTexture(): THREE.CanvasTexture {
   for (let variant = 0; variant < 2; variant++) {
     const ox = variant * 256;
     // asphalt-ish noise (luminance only — tinted by the material colour)
-    g.fillStyle = '#787878';
+    g.fillStyle = '#7e7e7e';
     g.fillRect(ox, 0, 256, 128);
-    for (let i = 0; i < 700; i++) {
-      const v = 104 + Math.floor(Math.random() * 36);
+    for (let i = 0; i < 550; i++) {
+      const v = 112 + Math.floor(Math.random() * 24);
       g.fillStyle = `rgb(${v},${v},${v})`;
       g.fillRect(ox + Math.random() * 256, Math.random() * 128, 2, 2);
     }
     // gravel shoulders (outer 3 m each side of the 30 m band)
-    g.fillStyle = '#585349';
+    g.fillStyle = '#5a554b';
     g.fillRect(ox, 0, 26, 128);
     g.fillRect(ox + 230, 0, 26, 128);
 
@@ -66,15 +70,15 @@ export function makeMarkingsTexture(): THREE.CanvasTexture {
       g.stroke();
       g.setLineDash([]);
     };
-    // solid edge lines (bright: they must survive the theme tint multiply)
-    line(-12, 5, '#ffffff');
-    line(12, 5, '#ffffff');
-    // internal lane boundaries: dashes (3 m on / 6 m off at 24 m tile height)
-    line(-6, 4, '#f2f2f2', [3, 6]);
-    line(6, 4, '#f2f2f2', [3, 6]);
+    // solid edge lines (bright + wide: they must survive the theme tint multiply)
+    line(-12, 6.5, '#ffffff');
+    line(12, 6.5, '#ffffff');
+    // internal lane boundaries: long dashes (4 m on / 8 m off — reads at speed)
+    line(-6, 5, '#ffffff', [4, 8]);
+    line(6, 5, '#ffffff', [4, 8]);
     // centre line: white dashes (same-dir) or double yellow (oncoming ×2)
     if (variant === 0) {
-      line(0, 4, '#f2f2f2', [3, 6]);
+      line(0, 4.5, '#ffffff', [4, 8]);
     } else {
       line(-0.4, 3.5, '#ffe14d');
       line(0.4, 3.5, '#ffe14d');
@@ -95,7 +99,11 @@ export class RoadRibbon {
   private readonly positions: Float32Array;
   private readonly uvs: Float32Array;
   private readonly rails: THREE.InstancedMesh;
+  private readonly posts: THREE.InstancedMesh;
+  private readonly reflectors: THREE.InstancedMesh;
   private readonly railMat: THREE.MeshStandardMaterial;
+  private readonly postMat: THREE.MeshStandardMaterial;
+  private readonly reflMat: THREE.MeshStandardMaterial;
   private readonly roadMat: THREE.MeshStandardMaterial;
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
@@ -104,6 +112,7 @@ export class RoadRibbon {
   private readonly dirV = new THREE.Vector3();
   private readonly sp: SpinePoint = { x: 0, z: 0, heading: 0 };
   private lastRailCenter = Number.NaN;
+  private lastPostCenter = Number.NaN;
   private E = 15;
 
   constructor(look: RoadLook, maxAniso: number) {
@@ -156,6 +165,38 @@ export class RoadRibbon {
     this.rails.frustumCulled = false;
     this.rails.count = 0;
     this.group.add(this.rails);
+
+    // ADR-016 readability: delineator posts every 24 m on both shoulders —
+    // white post + amber reflector band. Classic highway cue: they give the
+    // eye a rhythm that makes the road edge read long before the rail does.
+    this.postMat = new THREE.MeshStandardMaterial({
+      color: 0xe8e8e6,
+      roughness: 0.7,
+      metalness: 0.0,
+    });
+    this.posts = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(0.09, 1.0, 0.09),
+      this.postMat,
+      POST_POOL,
+    );
+    this.posts.frustumCulled = false;
+    this.posts.count = 0;
+    this.group.add(this.posts);
+    this.reflMat = new THREE.MeshStandardMaterial({
+      color: 0x281500,
+      emissive: 0xffb01f,
+      emissiveIntensity: 1.4,
+      roughness: 0.4,
+    });
+    this.reflectors = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(0.1, 0.13, 0.1),
+      this.reflMat,
+      POST_POOL,
+    );
+    this.reflectors.frustumCulled = false;
+    this.reflectors.count = 0;
+    this.group.add(this.reflectors);
+    this.lastPostCenter = Number.NaN;
   }
 
   setLook(look: RoadLook): void {
@@ -226,6 +267,38 @@ export class RoadRibbon {
     this.geo.computeBoundingSphere(); // keep culling honest (frustumCulled off anyway)
 
     this.updateRails(road, pS, half);
+    this.updatePosts(road, pS, half);
+  }
+
+  /** Delineators: white post (base y 0..1.0) + reflector band at 0.86. */
+  private updatePosts(road: RoadSystem, pS: number, half: number): void {
+    const center = Math.round(pS / POST_SEG);
+    if (center === this.lastPostCenter) return;
+    this.lastPostCenter = center;
+    const from = Math.max(0, pS - BEHIND);
+    const to = pS + AHEAD;
+    let n = 0;
+    for (const side of [-1, 1]) {
+      for (let s = from; s < to && n < POST_POOL; s += POST_SEG) {
+        road.sample(s, this.sp);
+        const rx = Math.cos(this.sp.heading);
+        const rz = Math.sin(this.sp.heading);
+        const px = this.sp.x + rx * side * (half + 1.35);
+        const pz = this.sp.z + rz * side * (half + 1.35);
+        this.posV.set(px, 0.5, pz);
+        this.q.identity();
+        this.m.compose(this.posV, this.q, ONE);
+        this.posts.setMatrixAt(n, this.m);
+        this.posV.set(px, 0.86, pz);
+        this.m.compose(this.posV, this.q, ONE);
+        this.reflectors.setMatrixAt(n, this.m);
+        n++;
+      }
+    }
+    this.posts.count = n;
+    this.reflectors.count = n;
+    this.posts.instanceMatrix.needsUpdate = true;
+    this.reflectors.instanceMatrix.needsUpdate = true;
   }
 
   private updateRails(road: RoadSystem, pS: number, half: number): void {
@@ -256,5 +329,9 @@ export class RoadRibbon {
     (this.mesh.material as THREE.Material).dispose();
     this.rails.geometry.dispose();
     this.railMat.dispose();
+    this.posts.geometry.dispose();
+    this.postMat.dispose();
+    this.reflectors.geometry.dispose();
+    this.reflMat.dispose();
   }
 }
