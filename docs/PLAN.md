@@ -10,6 +10,11 @@
 
 ## Changelog
 
+- **v3.1 (M20 delivered, ADR-019/020 — user directives "no assistance, very fast response" + "AR camera does nothing" + "UI look better"):** Directness & reliability pass:
+  **(1) Zero assistance, sharp response (ADR-019):** road heading-follow assist OFF by default, artificial scrub/yaw damping cut to near-zero (physical rear-slip term kept), steerRate 6.5/7.5/5.5 rad/s, squared gamepad curve, and the sensitivity slider (0.5-2.0x) now scales phone wheel + gamepad + keyboard (hands already had it).
+  **(2) AR camera fixed (ADR-020):** the ~19 MB hand-tracking engine (worker-only assets) is now precached by the service worker on every first visit — first camera click starts from cache (1.3 s measured) instead of a silent 19-30+ s cold download; the camera overlay shows a live loading line and the start timeout is 75 s.
+  **(3) Full-flow gauntlet (e2e-m20):** boot -> idle-then-gas -> wreck -> hesitate -> RETRY -> gas -> R-key retry -> garage -> re-drive, run against dev AND a production-shaped SW-controlled build.
+  **(4) UI polish:** glassy overlays with entrance motion, gradient title + pulsing CTA, unified button system (hover/press/focus/disabled), garage card lift, versus code glow, HUD speed glow.
 - **v3.0 (M17–M19 planned, ADR-016/017/018 — user directive "200 km/h, harder, roben.club rebrand, versus multiplayer"):** Four changes as one program:
   **(1) 200 km/h regime (ADR-016):** cruise cap 200 (Bruto 187) with the pyramid rescaled again — traffic families ×1.33 (77–149 km/h), spawn window 170–460 m, events ×1.33 placed 460–640 m, streaks from ~115 km/h, turn-radius bounds re-derived (v²/a ≈ 158 m at 2 g), brake targets re-measured, road bends already safe (R ≥ 740 m ≫ 158 m needed).
   **(2) Meaner traffic (ADR-016):** rivals 30%→45% of eligible cars, cooldown 5–9 s→3–6 s, ≤2→≤3 concurrent block cuts, defensive pacing ×1.15→×1.30, trigger band out to 110 m; density escalates faster (warm-up 8→11 over 3 min, then +1 per 45 s, ceiling 26, pool 56).

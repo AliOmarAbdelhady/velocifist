@@ -37,6 +37,11 @@ import { VersusPanel } from './ui/versus';
 import { VersusSession, type VsOutcome } from './net/session';
 import type { TrackerLike } from './render/pip';
 import type { SpinePoint } from './sim/road';
+// ADR-020: same specifiers as tracker.worker.ts → identical hashed output
+// names; importing here only yields URL strings (no mediapipe code pulled in)
+import arWasmGlueUrl from '@mediapipe/tasks-vision/vision_wasm_module_internal.js?url';
+import arWasmBinaryUrl from '@mediapipe/tasks-vision/vision_wasm_internal.wasm?url';
+import arModelUrl from './assets/models/hand_landmarker.task?url';
 
 const overlay = document.getElementById('overlay')!;
 const camchoice = document.getElementById('camchoice')!;
@@ -66,6 +71,7 @@ audio?.setVolume(persist.settings.volume);
 const gamepad = new GamepadInput();
 const remote = new RemoteInput();
 const manual = new ManualMerge();
+manual.setSensitivity(persist.settings.sensitivity); // ADR-019: all controllers
 
 function connectRemote(url: string): void {
   remote.connect(normalizeRelayUrl(url, location.protocol));
@@ -113,8 +119,10 @@ function comfortFromSettings() {
 const options = new OptionsPanel(persist, {
   onSettings: (s, changed) => {
     if (changed === '' || changed === 'pipCorner' || changed === 'pipScale') applyPipLayout(s);
-    if (changed === '' || changed === 'sensitivity' || changed === 'oneHanded')
+    if (changed === '' || changed === 'sensitivity' || changed === 'oneHanded') {
       applyTrackerSettings(getTrackerFn?.() ?? null);
+      manual.setSensitivity(s.sensitivity); // wheel · pad · keyboard too (ADR-019)
+    }
     if (changed === '' || changed === 'volume') audio?.setVolume(s.volume);
     if (changed === '' || changed === 'quality') currentGame?.quality.setMode(s.quality);
     if (
@@ -198,6 +206,11 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     void navigator.serviceWorker.register('sw.js').then(() =>
       navigator.serviceWorker.ready.then((reg) => {
         const urls = [location.href];
+        // ADR-020: the AR engine (wasm glue + binary + model, ~19 MB) loads
+        // only inside the worker, so it never appears in the resource
+        // timeline — prime it explicitly or the first camera start pays the
+        // full cold download while the player stares at a spinner.
+        urls.push(arWasmGlueUrl, arWasmBinaryUrl, arModelUrl);
         for (const r of performance.getEntriesByType('resource')) {
           const size = (r as PerformanceResourceTiming).transferSize ?? 0;
           if (size > 0 && r.name.startsWith(location.origin)) urls.push(r.name);
@@ -800,7 +813,7 @@ function chooseInput(tune: CarTune): void {
   audio?.revBlip();
   camchoice.classList.remove('hidden');
   const onCam = (): void => {
-    camchoice.classList.add('hidden');
+    // camchoice stays up: startWithCamera renders its loading state in it
     void startWithCamera(tune);
   };
   const onKb = (): void => {
@@ -815,11 +828,36 @@ function chooseInput(tune: CarTune): void {
 
 async function startWithCamera(tune: CarTune): Promise<void> {
   const tracker = new HandTracker();
-  // start() resolves only when the worker is genuinely READY (or classified error)
-  await tracker.start();
+  // ADR-020: the engine download is visible + generous — a cold cache on a
+  // slow network legitimately needs ~a minute for ~19 MB, and a silent wait
+  // reads as "the button does nothing" (the original field report).
+  camchoice.classList.remove('hidden');
+  const bCam = document.getElementById('btnCam') as HTMLButtonElement;
+  const bKb = document.getElementById('btnKb') as HTMLButtonElement;
+  bCam.disabled = true;
+  bKb.disabled = true;
+  const loadText = document.getElementById('camLoadText') as HTMLElement;
+  const camLoad = document.getElementById('camLoad') as HTMLElement;
+  camLoad.classList.remove('hidden');
+  const t0 = performance.now();
+  const tick = window.setInterval(() => {
+    const stage = tracker.info.phase === 'STARTING' && tracker.info.error
+      ? tracker.info.error.replace(/^loading: /, '') + ' · '
+      : '';
+    loadText.textContent = `${stage}${Math.round((performance.now() - t0) / 1000)}s`;
+  }, 250);
+  try {
+    await tracker.start(75_000);
+  } finally {
+    window.clearInterval(tick);
+    camLoad.classList.add('hidden');
+    bCam.disabled = false;
+    bKb.disabled = false;
+  }
   if (tracker.info.phase !== 'READY') {
     const why = tracker.info.error ?? tracker.info.phase;
     tracker.stop();
+    camchoice.classList.add('hidden');
     showCamLost(
       why,
       () => void startWithCamera(tune),
@@ -827,6 +865,7 @@ async function startWithCamera(tune: CarTune): Promise<void> {
     );
     return;
   }
+  camchoice.classList.add('hidden');
   applyTrackerSettings(tracker);
   pipwrap.classList.remove('hidden');
   const pip = new PipRenderer(document.getElementById('pip') as HTMLCanvasElement, tracker);

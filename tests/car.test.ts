@@ -90,7 +90,7 @@ describe.each(CAR_TUNES.map((t) => [t.name, t] as const))('validation: %s', (_na
     });
     // supercar glue: well past road-car grip, and CAPPED by the governor
     expect(maxG).toBeGreaterThanOrEqual(1.5);
-    expect(maxG).toBeLessThanOrEqual(2.6); // ADR-016: downforce cars peak higher at the 200 cap (Bruto 0.35 → ~2.5 g transient)
+    expect(maxG).toBeLessThanOrEqual(2.9); // ADR-019: less artificial yaw damping → sharper (taller) turn-in transient; the STEADY cap is still the governor
   });
 
   it('step-steer yaw response settles without twitch (wide pad, overshoot < 1.4)', () => {
@@ -264,5 +264,19 @@ describe('road guide (M4 curved world)', () => {
     // the old centre pull would have dragged lat → 0; freedom means it stays
     expect(Math.abs((minLat + maxLat) / 2 + 5.5)).toBeLessThan(2.5); // still ~where placed
     expect(maxLat - minLat).toBeLessThan(4.5); // and not drifting away either
+  });
+
+  it('ADR-019: no assistance by default — nothing re-aligns a drifting car', () => {
+    const road = RoadSystem.straight();
+    const car = new Car(CAR_TUNES[0]);
+    expect(car.laneAssist).toBe(false); // the contract: a real car, no nannies
+    car.guide = road;
+    car.u = 30;
+    car.heading = 0.06; // ~3.4° off-axis, hands off
+    for (let i = 0; i < 60 * 3; i++) {
+      car.step(DT, IDLE);
+    }
+    // free: the heading stays where the physics left it — no pull back to 0
+    expect(Math.abs(car.heading)).toBeGreaterThan(0.05);
   });
 });

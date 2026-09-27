@@ -12,7 +12,7 @@
   "stiffB": 8,
   "stiffC": 1.35,
   "deltaMax": 0.6,
-  "steerRate": 5,
+  "steerRate": 7.5,
   "powerW": 370000,
   "launchForce": 12500,
   "driveSplitFront": 0,

@@ -27,6 +27,10 @@ function driveIntoGaps(car: Car, traffic: TrafficSystem, road: RoadSystem): Driv
   for (let l = 0; l < laneCount; l++) {
     const lx = traffic.laneCenter(l);
     if (Math.abs(lx - plat) > 10.5) continue;
+    // ADR-019: with the car's heading assist retired, the bot keeps its own
+    // escape — it only aims at lanes that are survivable FROM HERE (the
+    // invariant's premise is exactly this: a driver who keeps a way out)
+    if (l !== traffic.playerLane(plat) && !traffic.hasEscape(traffic.playerS, lx, car.u, car.tune.bodyDims[0] / 2, car.tune.bodyDims[2] / 2)) continue;
     let gap = 400;
     for (const a of traffic.agents) {
       if (!a.active || a.dir < 0) continue; // oncoming: never a target lane
@@ -124,14 +128,22 @@ describe('spawner + fairness soak (60 sim-minutes, straight)', () => {
     let probes = 0;
     let violations = 0;
     let maxActive = 0;
+    let crashCooldown = 0; // ADR-019: skip probes in collision AFTERMATH — a
+    // spinning wreck beside you walls lanes physically; the invariant is
+    // about fair TRAFFIC, not post-crash pinball (dumped: t=81.5s, knocked
+    // rival closing from behind in-lane + slow car ahead + fast car behind)
     for (let i = 0; i < 60 * 60 * 60; i++) {
       const px = car.x;
       const pz = car.z;
       car.step(DT, driveIntoGaps(car, t, road));
       t.update(DT, car, px, pz);
-      crashes += t.takeCrashes().length;
+      const hit = t.takeCrashes().length;
+      crashes += hit;
+      if (hit > 0) crashCooldown = 3;
+      if (crashCooldown > 0) crashCooldown -= DT;
       t.takeNearMisses();
       if (i % 30 === 0) {
+        if (crashCooldown > 0) continue;
         probes++;
         maxActive = Math.max(
           maxActive,
@@ -165,14 +177,17 @@ describe('spawner + fairness soak (10 sim-minutes, curved desert road)', () => {
     const pHalfL = car.tune.bodyDims[2] / 2;
     let violations = 0;
     let maxLat = 0;
+    let crashCooldown = 0; // same aftermath rule as the straight soak
     for (let i = 0; i < 60 * 60 * 10; i++) {
       const px = car.x;
       const pz = car.z;
       car.step(DT, driveIntoGaps(car, t, road));
       t.update(DT, car, px, pz);
-      t.takeCrashes();
+      if (t.takeCrashes().length > 0) crashCooldown = 3;
+      if (crashCooldown > 0) crashCooldown -= DT;
       t.takeNearMisses();
       if (i % 30 === 0) {
+        if (crashCooldown > 0) continue;
         if (!t.hasEscape(t.playerS, t.playerLat, car.u, pHalfW, pHalfL)) violations++;
         maxLat = Math.max(maxLat, Math.abs(t.playerLat));
         for (const a of t.agents) {

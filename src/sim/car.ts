@@ -108,9 +108,10 @@ export class Car {
   /** Curved-world guide (M4): when set, off-road + soft wall use the lateral
    *  offset from the road spine instead of |x|. Null = straight road (tests). */
   guide: RoadGuide | null = null;
-  /** EASY MODE (user directive, ADR-008): lane-keep + stability assists are
-   *  always on in the game. Tests opt out for raw-dynamics gates. */
-  laneAssist = true;
+  /** ADR-019 (user directive: "no assistance, like a real car"): the road
+   *  heading-follow assist is OFF by default — the driver steers through
+   *  bends themselves. Opt back in per-test/per-mode if ever wanted. */
+  laneAssist = false;
   /** engine power multiplier (damage CRITICAL state sets 0.92) */
   powerScale = 1;
   /** last driver intent (audio + brake lights read these; derived state,
@@ -256,11 +257,12 @@ export class Car {
     const aw = Fright / m - this.u * this.omega;
     this.u += ax * dt;
     this.w += aw * dt;
-    // EASY: stronger scrub/yaw damping — the car actively refuses to spin
-    // (ESC-plus: kills slides fast, leaves normal cornering untouched)
-    this.w *= Math.max(0, 1 - 0.5 * dt);
+    // ADR-019: mild numerical calm only (0.12) — the grip governor already
+    // makes slides impossible; the old 0.5 "ESC-plus" scrub drag dulled
+    // turn-in and was assistance by another name
+    this.w *= Math.max(0, 1 - 0.12 * dt);
     this.omega += ((t.a * FyF * cosD - t.b * FyR) / t.iz) * dt;
-    this.omega *= Math.max(0, 1 - (0.55 + 1.8 * this.rearSlip) * dt);
+    this.omega *= Math.max(0, 1 - (0.18 + 1.8 * this.rearSlip) * dt);
     this.heading += this.omega * dt;
 
     // world integration (forward = (sin h, −cos h), right = (cos h, sin h))

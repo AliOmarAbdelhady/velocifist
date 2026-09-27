@@ -281,3 +281,19 @@ describe('phone remote auto-reconnect (field-report fix)', () => {
     expect(remoteReconnectDelayMs(-5)).toBe(500);
   });
 });
+
+describe('ADR-019 manual sensitivity (wheel · pad · keyboard)', () => {
+  it('scales the winning source and clamps at full lock', () => {
+    const m = new ManualMerge();
+    const kb = { steer: 0, throttle: 0, brake: 0 };
+    const pad = { steer: 0, throttle: 0, brake: 0 };
+    const phone = { steer: 0.5, throttle: 0.6, brake: 0 };
+    m.setSensitivity(1.5);
+    expect(m.update(kb, pad, phone, 100).steer).toBeCloseTo(0.75, 6);
+    m.setSensitivity(2.0);
+    expect(m.update(kb, pad, phone, 100.5).steer).toBe(1); // 0.5 × 2 clamps
+    m.setSensitivity(0.5);
+    expect(m.update(kb, pad, phone, 101).steer).toBeCloseTo(0.25, 6);
+    expect(m.source).toBe('remote');
+  });
+});

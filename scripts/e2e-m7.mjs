@@ -88,7 +88,7 @@ const wire = async (page) => {
   for (let i = 0; i < 70; i++) {
     await page.waitForTimeout(400);
     s = await read();
-    const m = s.hud.match(/assist ([0-9.]+)/);
+    const m = s.hud.match(/aid ([0-9.]+)/);
     const lvl = m ? parseFloat(m[1]) : 0;
     if (i % 5 === 0) {
       const st = await page.evaluate("(() => { const L = document.getElementById('devhud').textContent.split(String.fromCharCode(10)); return { h: document.getElementById('hudHealthLabel').textContent, i: L.find((l) => l.startsWith('in')), w: L.find((l) => l.startsWith('wld')) }; })()");
@@ -115,6 +115,10 @@ const wire = async (page) => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = await wire(page);
   await page.goto('http://localhost:5173/?smash=1');
+  // ADR-014 made driverAid 'off' the default — this gate is about the assist
+  // MECHANIC, so seed FULL explicitly
+  await page.evaluate(() =>
+    localStorage.setItem('vfc.settings', JSON.stringify({ driverAid: 'full', schema: 3 })));
   await page.click('#overlay');
   await page.waitForTimeout(200);
   await page.click('#btnGarageGo');
@@ -130,7 +134,7 @@ const wire = async (page) => {
   for (let i = 0; i < 90; i++) {
     await page.waitForTimeout(300);
     const st = await page.evaluate("(() => { const L = document.getElementById('devhud').textContent.split(String.fromCharCode(10)); return { i: L.find((l) => l.startsWith('in')), h: document.getElementById('hudHealthLabel').textContent, chip: document.getElementById('hudAssist').classList.contains('on'), v: document.getElementById('hudSpeed').textContent.trim() }; })()");
-    const m = st.i && st.i.match(/assist ([0-9.]+)/);
+    const m = st.i && st.i.match(/aid ([0-9.]+)/);
     const lvl = m ? parseFloat(m[1]) : 0;
     if (lvl > peakAssist) peakAssist = lvl;
     if (st.chip) {
@@ -165,13 +169,19 @@ const wire = async (page) => {
   await page.click('#btnGarageGo');
   await page.waitForTimeout(200);
   await page.click('#btnCam');
-  await page.waitForTimeout(9000); // worker init (model load)
-
-  const s = await page.evaluate(() => ({
-    pip: !document.getElementById('pipwrap').classList.contains('hidden'),
-    glow: document.getElementById('handGlow').className,
-    hud: document.getElementById('devhud').textContent,
-  }));
+  // poll for the pipeline (worker init / model load can exceed 9 s when the
+  // GPU delegate falls back to CPU under swiftshader contention)
+  let s = { pip: false, camlost: false, glow: '', hud: '' };
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(1000);
+    s = await page.evaluate(() => ({
+      pip: !document.getElementById('pipwrap').classList.contains('hidden'),
+      camlost: !document.getElementById('camlost').classList.contains('hidden'),
+      glow: document.getElementById('handGlow').className,
+      hud: document.getElementById('devhud').textContent,
+    }));
+    if (s.pip || s.camlost) break;
+  }
   console.log('FAKECAM pip=' + s.pip + ' glow=' + s.glow);
   console.log('FAKECAM in-line=' + s.hud.split('\n').find((l) => l.startsWith('in')));
   await page.screenshot({ path: `${OUT}/05-fakecam.png` });

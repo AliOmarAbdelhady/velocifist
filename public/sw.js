@@ -4,7 +4,7 @@
 // on first fetch (cache-first for assets, network-first for navigations).
 // The 20 MB wasm+model land in the same cache: once you have played with the
 // camera once, the whole game — tracking included — works offline.
-const CACHE = 'roben-v4'; // phone-remote auto-reconnect + versus restart fixes // versus now rides public MQTT relays (cross-network by design) // M19 hotfix: force revalidate (TURN + versus retry) // ADR-017: renamed cache forces one clean refetch of the rebranded app
+const CACHE = 'roben-v5'; // ADR-020: AR engine precached on first visit + visible camera loading state // zero-assist directness (ADR-019) // phone-remote auto-reconnect + versus restart fixes
 
 self.addEventListener('install', () => {
   self.skipWaiting();

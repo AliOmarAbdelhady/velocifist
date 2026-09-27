@@ -226,3 +226,29 @@ M0 ships the dev HUD (FPS/ms/draw calls/tris) + fixed-timestep loop with determi
 **Decision.** Replace WebRTC/PeerJS with **MQTT over secure WebSocket through public anonymous brokers** (broker.emqx.io primary, broker.hivemq.com fallback), `mqtt.js` lazy-loaded only when Versus opens. Topics `roben-race/v1/<CODE>/a|b`; presence is app-level: guest repeats hello every 1 s until the host's start (self-healing), ping/pong at 1 Hz, Last-Will publishes bye on ungraceful death, the 6 s silence guard settles races. A 20 s join timeout reports "no match with that code". Measured broker latency ~100 ms publish→deliver.
 
 **Consequences.** No NAT traversal exists to fail — versus works on any pair of networks, which is the requirement. Latency is relay-grade (fine for ghost poses; the opponent is advisory, never physical). Public brokers are anonymous shared infrastructure: codes are unguessable (31⁵) but not cryptographic — accepted for an arcade 1v1. e2e-m19 now exercises the REAL production relay end to end.
+
+---
+
+## ADR-019 — Directness: zero assistance, high sensitivity, sharp response (2026-09-26, user directive "no assistance, like a real car — very accurate, very fast left/right, no lag")
+
+**Context.** ADR-014 already deleted the lane centre-pull and defaulted the collision aid off, but three hidden assists survived inside the car model itself: the road heading-follow assist (bends auto-aligned the car), an artificial scrub drag (w ×0.5/s) and a flat yaw damping (omega ×0.55/s) — collectively "ESC-plus". The user wants the steering to feel 1:1 and immediate on every controller.
+
+**Decision.**
+1. `laneAssist` defaults to **false** (tests that need it opt in). Nothing re-aligns a drifting car anymore; the driver steers through bends themselves.
+2. The artificial damping is cut to the minimum that keeps the integrator calm: scrub 0.5→**0.12**/s, flat yaw term 0.55→**0.18**/s (the physical 1.8·rearSlip term stays — the grip governor remains the car's character).
+3. `steerRate` 4–5 → **6.5 / 7.5 / 5.5** rad/s (Falcone / Vipera / Bruto) — lock-to-lock noticeably faster.
+4. Gamepad curve cubic→**squared** (finer centre, faster ramp); the steering **sensitivity** slider (0.5–2.0×) now multiplies the MERGED manual intent — phone wheel, gamepad and keyboard alike (`ManualMerge.setSensitivity`), and the hand-tracking solver keeps its own.
+5. The counter-steer safety net (rear axle saturated + body sliding) is retained — under the no-slip grip governor it only ever fires in transient extremes, and removing it bought nothing measurable.
+
+**Consequences.** The blind full-gas e2e bot eats more crash valleys by design — e2e-m11's hold-fraction gate is recalibrated to ≥0.28 (the CAP gates are the contract; 74% measured). Bruto's full-lock transient rises to 2.76 g → brake-test gate ≤2.9. A new car test pins the no-assist default: hands-off with a heading offset keeps drifting. Unit suite 253 green.
+
+## ADR-020 — AR camera: precache the worker-only engine, show the load (2026-09-27, user report "when i open the camera nothing happens")
+
+**Context.** Field-reproduced on production: clicking "Enable camera & calibrate" started a silent worker init that downloads ~19 MB (wasm glue + 11.2 MB wasm + 7.5 MB model) through the service worker — 19–30+ s on the user's network — while the UI showed NOTHING (the camera-choice overlay hid instantly; the failure path only surfaced after a 25 s timeout). Worse, those assets load ONLY inside the worker, so the SW's first-visit priming (built from `performance.getEntriesByType('resource')`) never saw them: every new player paid the full cold download exactly when they first clicked the camera.
+
+**Decision.**
+1. **Prime worker-only assets explicitly:** `main.ts` imports the same three `?url` specifiers the worker uses (Vite dedupes to identical hashed filenames — no bytes added) and includes them in the SW prime message. The engine now lands in Cache Storage in the background right after any first visit; the first camera start is a cache hit (measured 1.3 s to READY on a production-shaped build, SW active).
+2. **Make the load visible:** the camera-choice overlay stays up with a live status line (stage text from the worker + elapsed seconds) and a "first load fetches ~19 MB once" note; buttons disable during load. The start timeout rises 25 s → **75 s** for slow networks, after which the classified CAMERA LOST screen appears as before.
+3. e2e-m7's camera run polls up to 40 s instead of a fixed 9 s wait (CPU-delegate fallback under swiftshader contention is legitimately slower).
+
+**Consequences.** "Nothing happens" is now impossible: every camera start shows either progress or an error. Keyboard-only players also carry the 19 MB in the cache — accepted (the game's identity is hand-tracking; and it enables offline camera play, which was already the SW's promise). Verified: e2e-m7 green locally; production-shaped subpath build + SW shows all three assets cached after first visit and a 1.3 s camera start.

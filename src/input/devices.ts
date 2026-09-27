@@ -35,8 +35,9 @@ export function gamepadIntent(
 ): DriverIntent {
   const steerAxis = pad.axes[0] ?? 0;
   const mag = Math.min(1, Math.max(0, Math.abs(steerAxis) - DEADZONE) / (1 - DEADZONE));
-  // cubic curve: fine control near centre, full lock at the stick extremes
-  const steer = Math.sign(steerAxis) * mag * mag * mag;
+  // ADR-019: squared (was cubic) — cubic felt numb near centre and read as
+  // latency; squared keeps a whisper of centre calm with direct response
+  const steer = Math.sign(steerAxis) * mag * mag;
   // DualShock 4 (standard mapping in Chrome/Edge): 0=✕ 1=○ 2=□ 6=L2 7=R2.
   // Analog triggers preferred; buttons as digital fallback.
   const r2 = pad.buttons[7]?.value ?? 0;
@@ -241,6 +242,13 @@ export class ManualMerge {
   /** label of the currently winning source ('keyboard' | 'gamepad' | 'remote' | '') */
   source = '';
   private lastActive: Record<string, number> = { keyboard: -1, gamepad: -1, remote: -1 };
+  /** ADR-019: steering sensitivity applies to EVERY manual source (phone
+   *  wheel, gamepad, keyboard) — it used to reach only the hand tracker */
+  private sens = 1;
+
+  setSensitivity(v: number): void {
+    this.sens = Math.max(0.25, Math.min(2.5, v));
+  }
 
   update(
     keyboard: DriverIntent,
@@ -265,7 +273,7 @@ export class ManualMerge {
     }
     this.source = best;
     const pick = best ? (live.find(([n]) => n === best)?.[1] as DriverIntent) : null;
-    this.intent.steer = pick ? pick.steer : 0;
+    this.intent.steer = pick ? Math.max(-1, Math.min(1, pick.steer * this.sens)) : 0;
     this.intent.throttle = pick ? pick.throttle : 0;
     this.intent.brake = pick ? pick.brake : 0;
     return this.intent;
