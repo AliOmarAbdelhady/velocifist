@@ -199,7 +199,12 @@ export class OptionsPanel {
     const tracker = this.cb.getTracker();
     this.recal.disabled = tracker === null;
     this.recalHint.textContent =
-      tracker === null ? 'camera mode only' : `${tracker.info.latencyMs.toFixed(0)} ms · ${tracker.info.delegate}`;
+      tracker === null
+        ? 'camera mode only'
+        : `${tracker.info.latencyMs.toFixed(0)} ms · ${tracker.info.delegate}` +
+          (tracker.info.fps
+            ? ` · ${tracker.info.fps.toFixed(0)} fps · ${tracker.info.res ?? '—'}`
+            : '');
   }
 
   private updateLatency(): void {

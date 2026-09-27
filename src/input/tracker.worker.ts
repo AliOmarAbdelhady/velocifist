@@ -10,6 +10,7 @@
 // MediaPipe loads its wasm glue (PILL 034).
 
 import { HandLandmarker } from '@mediapipe/tasks-vision';
+import { pickDelegate } from './trackerTuning';
 // NOTE: the MODULE build of the glue — the classic build ("vision_wasm_internal.js")
 // assigns its factory to globals that don't exist when imported as ESM in a
 // module worker → "ModuleFactory not set". Binary is shared between variants.
@@ -17,14 +18,12 @@ import wasmLoaderUrl from '@mediapipe/tasks-vision/vision_wasm_module_internal.j
 import wasmBinaryUrl from '@mediapipe/tasks-vision/vision_wasm_internal.wasm?url';
 import modelUrl from '../assets/models/hand_landmarker.task?url';
 
-const W = 320;
-const H = 240;
-
 const post = (msg: unknown, transfer?: Transferable[]): void => {
   (self as unknown as { postMessage(m: unknown, t?: Transferable[]): void }).postMessage(msg, transfer);
 };
 
-const canvas = new OffscreenCanvas(W, H);
+// inference canvas — resized on the fly when the adaptive resolution changes
+const canvas = new OffscreenCanvas(320, 240);
 const ctx = canvas.getContext('2d')!;
 let landmarker: HandLandmarker | null = null;
 let inFlight = false;
@@ -44,36 +43,84 @@ async function buildFileset(): Promise<{ wasmLoaderPath: string; wasmBinaryPath:
   return { wasmLoaderPath: blobUrl, wasmBinaryPath: wasmBinaryUrl };
 }
 
-async function createLandmarker(): Promise<'GPU' | 'CPU'> {
-  const fileset = await buildFileset();
-  post({ type: 'status', message: 'creating landmarker (GPU)' });
-  const make = (delegate: 'GPU' | 'CPU') =>
-    HandLandmarker.createFromOptions(fileset, {
+async function createLandmarker(prefer: 'auto' | 'gpu' | 'cpu'): Promise<{ delegate: 'GPU' | 'CPU'; ms: number }> {
+  post({ type: 'status', message: 'creating landmarker' });
+  // Each instance gets a FRESH blob URL for the wasm glue: two landmarkers
+  // sharing one glue module scope die with "ModuleFactory not set" (the
+  // second instance finds the factory already consumed).
+  const make = async (delegate: 'GPU' | 'CPU') =>
+    HandLandmarker.createFromOptions(await buildFileset(), {
       baseOptions: { modelAssetPath: modelUrl, delegate },
       runningMode: 'VIDEO',
       numHands: 2,
       // sticky tracking (M7 hands pass): lower bars keep locks through
-      // motion blur / partial occlusion instead of dropping outright
+      // motion blur / partial occlusion instead of dropping outright.
+      // ADR-021: CPU inference is noisier — track even stickier.
       minHandDetectionConfidence: 0.45,
       minHandPresenceConfidence: 0.4,
-      minTrackingConfidence: 0.35,
+      minTrackingConfidence: 0.3,
     });
-  try {
-    landmarker = await make('GPU');
-    return 'GPU';
-  } catch {
-    landmarker = await make('CPU');
-    return 'CPU';
+
+  // ADR-021: measure, don't assume. A weak GPU initializes WebGL fine and
+  // then runs several times slower than the CPU; "GPU first, CPU on crash"
+  // locks such machines into the slow path forever. Build + benchmark +
+  // CLOSE each delegate sequentially (one wasm runtime alive at a time —
+  // a transient double is exactly what a weak laptop can't afford), then
+  // rebuild the winner.
+  const bench = async (l: HandLandmarker): Promise<number> => {
+    let ts = performance.now();
+    l.detectForVideo(canvas, ts); // warm-up (JIT / wasm page-in)
+    const samples: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const t0 = performance.now();
+      ts = Math.max(t0, ts + 1); // detectForVideo needs monotonic stamps
+      l.detectForVideo(canvas, ts);
+      samples.push(performance.now() - t0);
+    }
+    samples.sort((a, b) => a - b);
+    return samples[Math.floor(samples.length / 2)];
+  };
+
+  const tryBench = async (delegate: 'GPU' | 'CPU'): Promise<number | null> => {
+    try {
+      const l = await make(delegate);
+      const ms = await bench(l);
+      l.close();
+      return ms;
+    } catch (err) {
+      console.warn(`[ar] ${delegate} delegate unusable:`, err instanceof Error ? err.message : String(err));
+      return null;
+    }
+  };
+
+  let gpuMs: number | null = null;
+  let cpuMs: number | null = null;
+  if (prefer === 'gpu' || prefer === 'auto') gpuMs = await tryBench('GPU');
+  if (prefer === 'cpu' || prefer === 'auto' || gpuMs === null) cpuMs = await tryBench('CPU');
+
+  const delegate =
+    prefer === 'gpu' && gpuMs !== null
+      ? 'GPU'
+      : prefer === 'cpu' && cpuMs !== null
+        ? 'CPU'
+        : pickDelegate(gpuMs, cpuMs);
+  const ms = delegate === 'GPU' ? gpuMs : cpuMs;
+  if (ms === null) {
+    throw new Error('neither GPU nor CPU delegate could be initialized');
   }
+
+  post({ type: 'status', message: `starting ${delegate} inference` });
+  landmarker = await make(delegate);
+  return { delegate, ms };
 }
 
 self.onmessage = async (e: MessageEvent) => {
-  const msg = e.data as { type: 'init' } | { type: 'frame'; ts: number; bitmap: ImageBitmap };
+  const msg = e.data as { type: 'init'; prefer?: 'auto' | 'gpu' | 'cpu' } | { type: 'frame'; ts: number; bitmap: ImageBitmap };
 
   if (msg.type === 'init') {
     try {
-      const delegate = await createLandmarker();
-      post({ type: 'ready', delegate });
+      const { delegate, ms } = await createLandmarker(msg.prefer ?? 'auto');
+      post({ type: 'ready', delegate, ms });
     } catch (err) {
       post({ type: 'error', message: err instanceof Error ? err.message : String(err) });
     }
@@ -87,9 +134,16 @@ self.onmessage = async (e: MessageEvent) => {
     }
     inFlight = true;
     try {
-      ctx.drawImage(msg.bitmap, 0, 0, W, H);
+      // ADR-021: the inference canvas follows the adaptive frame size
+      if (canvas.width !== msg.bitmap.width || canvas.height !== msg.bitmap.height) {
+        canvas.width = msg.bitmap.width;
+        canvas.height = msg.bitmap.height;
+      }
+      ctx.drawImage(msg.bitmap, 0, 0);
       msg.bitmap.close();
+      const t0 = performance.now();
       const result = landmarker.detectForVideo(canvas, msg.ts);
+      const inferMs = performance.now() - t0;
       const n = result.landmarks.length;
       const data = new Float32Array(n * 63);
       const labels = new Int8Array(n);
@@ -106,7 +160,7 @@ self.onmessage = async (e: MessageEvent) => {
         scores[h] = cat?.score ?? 0.9;
       }
       post(
-        { type: 'hands', ts: msg.ts, count: n, data, labels, scores },
+        { type: 'hands', ts: msg.ts, count: n, data, labels, scores, ms: inferMs },
         [data.buffer, labels.buffer, scores.buffer],
       );
     } catch (err) {

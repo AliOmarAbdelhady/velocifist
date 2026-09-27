@@ -10,6 +10,11 @@
 
 ## Changelog
 
+- **v3.2 (M21 delivered, ADR-021 — user directive "no proper GPU — make the AR accurate, usable, easy to play"):** CPU-class AR:
+  **(1) Measured delegate pick** — the worker benchmarks GPU and CPU at init (build, 5 blank-frame inferences median, close — one wasm runtime alive at a time) and rebuilds the winner; GPU must be 15% faster or CPU is chosen; `?ar=cpu|gpu` forces it.
+  **(2) Adaptive inference resolution** — per-delegate ladders re-evaluated every 45 frames from the inference-ms EMA (slow steps down, fast steps up); bigger frames = better landmark accuracy whenever the machine has headroom.
+  **(3) Pump decoupled** — requestVideoFrameCallback drives frame capture at camera cadence; a saturated render loop can no longer starve hand tracking.
+  **(4) CPU-jitter tuning** — One Euro retuned (0.9/0.012), wheel dead zone 24 deg, slew 480 deg/s, stickier tracking confidence 0.30; options panel shows live `ms · delegate · fps · res`.
 - **v3.1 (M20 delivered, ADR-019/020 — user directives "no assistance, very fast response" + "AR camera does nothing" + "UI look better"):** Directness & reliability pass:
   **(1) Zero assistance, sharp response (ADR-019):** road heading-follow assist OFF by default, artificial scrub/yaw damping cut to near-zero (physical rear-slip term kept), steerRate 6.5/7.5/5.5 rad/s, squared gamepad curve, and the sensitivity slider (0.5-2.0x) now scales phone wheel + gamepad + keyboard (hands already had it).
   **(2) AR camera fixed (ADR-020):** the ~19 MB hand-tracking engine (worker-only assets) is now precached by the service worker on every first visit — first camera click starts from cache (1.3 s measured) instead of a silent 19-30+ s cold download; the camera overlay shows a live loading line and the start timeout is 75 s.

@@ -39,7 +39,7 @@ export interface TrackedHand {
 
 /** Worker → main message payloads. */
 export type TrackerMessage =
-  | { type: 'ready'; delegate: 'GPU' | 'CPU' }
+  | { type: 'ready'; delegate: 'GPU' | 'CPU'; ms?: number }
   | { type: 'status'; message: string }
   | { type: 'error'; message: string }
   | {
@@ -49,4 +49,10 @@ export type TrackerMessage =
       data: Float32Array; // count × 63
       labels: Int8Array; // count
       scores: Float32Array; // count
+      ms?: number; // this frame's inference time (ADR-021 adaptive resolution)
     };
+
+/** Main → worker messages. */
+export type TrackerCommand =
+  | { type: 'init'; prefer?: 'auto' | 'gpu' | 'cpu' } // ADR-021 delegate pick
+  | { type: 'frame'; ts: number; bitmap: ImageBitmap };

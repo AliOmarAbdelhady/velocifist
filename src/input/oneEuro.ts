@@ -12,8 +12,11 @@ export interface OneEuroConfig {
 }
 
 export const DEFAULT_ONE_EURO: OneEuroConfig = {
-  minCutoff: 1.0,
-  beta: 0.007,
+  // ADR-021 (CPU-class AR): slightly softer at rest (CPU landmarks jitter
+  // more) but notably faster to follow real motion — beta up ~70% cuts the
+  // lag a slow-moving wheel feels, which is what "accurate" reads as.
+  minCutoff: 0.9,
+  beta: 0.012,
   dCutoff: 1.0,
 };
 

@@ -18,6 +18,10 @@ export interface TrackerLike {
     readonly phase: string;
     readonly latencyMs: number;
     readonly delegate: string;
+    /** ADR-021 — absent on synthetic sources */
+    readonly inferenceMs?: number;
+    readonly fps?: number;
+    readonly res?: string;
     readonly lastHands: readonly RawHand[];
   };
   readonly pair: HandPair;

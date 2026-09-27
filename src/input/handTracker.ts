@@ -11,6 +11,13 @@
 import { GestureSolver } from './gestures';
 import { HandIdentityTracker, type HandPair } from './handTracks';
 import type { RawHand, TrackerMessage } from './handTypes';
+import {
+  RES_EVAL_FRAMES,
+  RES_LADDERS,
+  nextResolution,
+  startResolution,
+  type DelegatePref,
+} from './trackerTuning';
 import { loadJSON, saveJSON } from '../persist/local';
 
 export type TrackerPhase =
@@ -25,6 +32,12 @@ export interface TrackerInfo {
   delegate: 'GPU' | 'CPU' | '—';
   error: string | null;
   latencyMs: number;
+  /** EMA of worker-reported inference ms (ADR-021) */
+  inferenceMs: number;
+  /** EMA of processed frames per second (ADR-021) */
+  fps: number;
+  /** current inference frame size, e.g. "320×240" (ADR-021) */
+  res: string;
   /** mirrored raw detections of the latest processed frame (for the PiP) */
   lastHands: readonly RawHand[];
 }
@@ -54,6 +67,9 @@ export class HandTracker {
     delegate: '—',
     error: null,
     latencyMs: 0,
+    inferenceMs: 0,
+    fps: 0,
+    res: '—',
     lastHands: [],
   };
 
@@ -71,6 +87,11 @@ export class HandTracker {
   private consecutiveErrors = 0;
   private lostFired = false;
   private muteTimer: number | null = null;
+  // ADR-021 adaptive resolution + rVFC pump bookkeeping
+  private res: [number, number] = [320, 240];
+  private framesSinceEval = 0;
+  private pumpScheduled = false;
+  private pumpTimer: number | null = null;
 
   constructor() {
     this.solver = new GestureSolver(
@@ -94,8 +115,9 @@ export class HandTracker {
   /**
    * Starts camera + worker and resolves when the pipeline is READY
    * (or failed with a classified error — check info.phase/info.error).
+   * ADR-021: `prefer` overrides the measured GPU/CPU pick (?ar= URL).
    */
-  async start(timeoutMs = 25000): Promise<void> {
+  async start(timeoutMs = 75000, prefer: DelegatePref = 'auto'): Promise<void> {
     this.info.phase = 'STARTING';
     this.info.error = null;
     this.lostFired = false;
@@ -150,7 +172,7 @@ export class HandTracker {
       type: 'module',
     });
     this.worker.onmessage = (e: MessageEvent<TrackerMessage>) => this.onMessage(e.data);
-    this.worker.postMessage({ type: 'init' }); // asset URLs are bundled into the worker
+    this.worker.postMessage({ type: 'init', prefer }); // asset URLs are bundled into the worker
 
     const ready = new Promise<void>((resolve) => {
       this.readyResolve = resolve;
@@ -169,6 +191,11 @@ export class HandTracker {
       clearTimeout(this.muteTimer);
       this.muteTimer = null;
     }
+    if (this.pumpTimer !== null) {
+      clearInterval(this.pumpTimer);
+      this.pumpTimer = null;
+    }
+    this.pumpScheduled = false;
     this.worker?.terminate();
     this.worker = null;
     this.stream?.getTracks().forEach((t) => t.stop());
@@ -185,28 +212,59 @@ export class HandTracker {
   }
 
   private startPump(): void {
-    const pump = async (): Promise<void> => {
-      if (this.info.phase === 'DENIED' || this.info.phase === 'ERROR' || this.info.phase === 'IDLE') return;
-      if (this.video.readyState >= 2 && !this.pending && this.worker) {
-        this.pending = true;
-        try {
-          // GPU delegate gets a bigger inference frame (better detection at
-          // distance / poor light); CPU stays small to hold frame rate
-          const big = this.info.delegate === 'GPU';
-          const bitmap = await createImageBitmap(this.video, {
-            resizeWidth: big ? 480 : 320,
-            resizeHeight: big ? 360 : 240,
-            resizeQuality: big ? 'medium' : 'low',
-          });
-          const ts = performance.now();
-          this.worker.postMessage({ type: 'frame', ts, bitmap }, [bitmap]);
-        } catch {
-          this.pending = false;
-        }
+    this.schedulePump();
+    // Watchdog: if the rVFC/rAF scheduling chain ever stalls (driver quirk,
+    // tab throttling), restart it — the pump must never silently die.
+    this.pumpTimer = window.setInterval(() => {
+      if (
+        this.pumpScheduled ||
+        this.info.phase === 'DENIED' ||
+        this.info.phase === 'ERROR' ||
+        this.info.phase === 'IDLE'
+      ) {
+        return;
       }
-      requestAnimationFrame(() => void pump());
+      this.schedulePump();
+    }, 500);
+  }
+
+  private schedulePump(): void {
+    if (this.pumpScheduled) return;
+    this.pumpScheduled = true;
+    // ADR-021: requestVideoFrameCallback fires per DECODED camera frame —
+    // the pump cadence stays at the camera's ~30 Hz even when the main
+    // thread is saturated by the render loop on weak machines (rAF would
+    // throttle hand tracking down to the game's fps).
+    type RVFCVideo = HTMLVideoElement & {
+      requestVideoFrameCallback?: (cb: () => void) => number;
     };
-    void pump();
+    const v = this.video as RVFCVideo;
+    if (typeof v.requestVideoFrameCallback === 'function') {
+      v.requestVideoFrameCallback(() => void this.pumpOnce());
+    } else {
+      requestAnimationFrame(() => void this.pumpOnce());
+    }
+  }
+
+  private async pumpOnce(): Promise<void> {
+    this.pumpScheduled = false;
+    if (this.info.phase === 'DENIED' || this.info.phase === 'ERROR' || this.info.phase === 'IDLE') return;
+    if (this.video.readyState >= 2 && !this.pending && this.worker) {
+      this.pending = true;
+      try {
+        const [w, h] = this.res;
+        const bitmap = await createImageBitmap(this.video, {
+          resizeWidth: w,
+          resizeHeight: h,
+          resizeQuality: w >= 480 ? 'medium' : 'low',
+        });
+        const ts = performance.now();
+        this.worker.postMessage({ type: 'frame', ts, bitmap }, [bitmap]);
+      } catch {
+        this.pending = false;
+      }
+    }
+    this.schedulePump();
   }
 
   private lose(reason: string): void {
@@ -223,6 +281,9 @@ export class HandTracker {
     if (msg.type === 'ready') {
       this.info.phase = 'READY';
       this.info.delegate = msg.delegate;
+      this.info.inferenceMs = msg.ms ?? 0;
+      this.res = startResolution(msg.delegate);
+      this.info.res = `${this.res[0]}×${this.res[1]}`;
       this.readyResolve?.();
       return;
     }
@@ -249,6 +310,25 @@ export class HandTracker {
     this.consecutiveErrors = 0;
     const now = performance.now();
     this.info.latencyMs = this.info.latencyMs * 0.85 + (now - msg.ts) * 0.15;
+    if (typeof msg.ms === 'number') {
+      this.info.inferenceMs =
+        this.info.inferenceMs === 0 ? msg.ms : this.info.inferenceMs * 0.9 + msg.ms * 0.1;
+    }
+    // processed-frame-rate EMA from wall-clock deltas
+    if (this.lastFrameWallTime > 0) {
+      const hz = 1000 / Math.max(1, now - this.lastFrameWallTime);
+      this.info.fps = this.info.fps === 0 ? hz : this.info.fps * 0.9 + hz * 0.1;
+    }
+    // ADR-021 adaptive resolution: re-evaluate the inference frame size on a
+    // fixed cadence so one slow frame (GC, tab switch) can't flap it
+    if (++this.framesSinceEval >= RES_EVAL_FRAMES) {
+      this.framesSinceEval = 0;
+      const next = nextResolution(this.info.inferenceMs, this.res, RES_LADDERS[this.info.delegate === 'GPU' ? 'GPU' : 'CPU']);
+      if (next) {
+        this.res = next;
+        this.info.res = `${next[0]}×${next[1]}`;
+      }
+    }
 
     // mirror: screen-left = player-left
     const hands: RawHand[] = [];

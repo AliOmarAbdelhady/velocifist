@@ -191,4 +191,55 @@ const wire = async (page) => {
   if (errors.length > 0) process.exit(2);
 }
 
+// --------------------------------------- run 3: forced CPU delegate (ADR-021)
+{
+  const browser = await launch();
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const errors = await wire(page);
+  await page.goto('http://localhost:5173/?ar=cpu');
+  await page.evaluate((c) => localStorage.setItem('vfc.calib', JSON.stringify(c)), CALIB);
+  await page.click('#overlay');
+  await page.waitForTimeout(200);
+  await page.click('#btnGarageGo');
+  await page.waitForTimeout(200);
+  await page.click('#btnCam');
+  let s = { pip: false, camlost: false, inLine: '' };
+  for (let i = 0; i < 45; i++) {
+    await page.waitForTimeout(1000);
+    s = await page.evaluate(() => ({
+      pip: !document.getElementById('pipwrap').classList.contains('hidden'),
+      camlost: !document.getElementById('camlost').classList.contains('hidden'),
+      inLine:
+        document.getElementById('devhud').textContent
+          .split('\n')
+          .find((l) => l.startsWith('in')) ?? '',
+    }));
+    if (s.pip || s.camlost) break;
+  }
+  console.log('CPU-FORCE pip=' + s.pip + ' | ' + s.inLine.trim());
+  if (!s.pip) throw new Error('forced-CPU pipeline did not reach READY');
+  // the devhud 'in' line renders on the first game tick after launch
+  await page.waitForTimeout(1500);
+  s.inLine =
+    (await page.evaluate(
+      () =>
+        document.getElementById('devhud').textContent
+          .split('\n')
+          .find((l) => l.startsWith('in')) ?? '',
+    )) ?? '';
+  console.log('CPU-FORCE in-line=' + s.inLine.trim());
+  if (!/\bCPU\b/.test(s.inLine)) throw new Error('delegate is not CPU under ?ar=cpu: ' + s.inLine);
+  // let the adaptive ladder + fps EMA settle, then record the readout
+  await page.waitForTimeout(6000);
+  const opts = await page.evaluate(() => {
+    document.getElementById('btnOptions')?.click();
+    return document.getElementById('optRecalHint').textContent;
+  });
+  console.log('CPU-FORCE tracking readout: ' + opts);
+  await page.keyboard.press('Escape');
+  console.log('ERRORS run3 (' + errors.length + '):\n' + errors.slice(0, 6).join('\n'));
+  await browser.close();
+  if (errors.length > 0) process.exit(2);
+}
+
 console.log('E2E M7 OK');

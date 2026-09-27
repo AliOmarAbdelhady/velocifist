@@ -238,3 +238,10 @@
 - **Full-game Chrome gauntlet (new e2e-m20):** boot → gas from standstill → 12 s idle then gas → wreck → 8 s hesitation → RETRY click → gas on the fresh run → R-key retry → G to garage → drive again — 10/10 green against dev AND the production-shaped build (SW active). Plus m7 (camera, gates repaired: `aid` label, seeded full aid, 40 s poll), m12, reconnect, and m19 (full versus race + rematch + disconnect win + R-exit through the REAL public MQTT relay) all green.
 - **UI polish pass:** glassy overlays (backdrop blur + entrance rise, reduced-motion aware), gradient title + pulsing CTA chip on the title screen, full button system (gradient primary, hover lift, press, focus rings, disabled state), garage card hover lift + selected glow, versus code glow, HUD speed glow.
 - Docs: ADR-019, ADR-020, PILLs 126–127, PLAN v3.1; SW cache roben-v5.
+
+### Session 24 (2026-09-27) — M21: CPU-class AR (user: "no proper GPU — accurate, usable, easy")
+- Delegate chosen by MEASUREMENT at init (build+bench+close sequentially, rebuild winner; GPU needs a 15% margin, ties → CPU); fresh wasm-glue blob per instance (shared scope dies with "ModuleFactory not set"); `?ar=cpu|gpu` override for tests and the field.
+- Adaptive inference resolution (CPU 256→320→384, GPU 320→480→560) re-evaluated every 45 frames from the inference-ms EMA — accuracy whenever there is headroom, frame rate when there isn't; worker canvas follows the frame size; per-frame ms flows to the tracker.
+- Camera pump on requestVideoFrameCallback (+rAF fallback +watchdog) — a saturated render loop can no longer throttle hand tracking.
+- CPU-jitter tuning: One Euro (0.9/0.012), wheel dead zone 24°, slew 480°/s, minTrackingConfidence 0.30. Options readout: `ms · delegate · fps · res`.
+- Verified: 265/268 tests (new trackerTuning suite), typecheck, build, forced-CPU fake-camera probe end to end (CPU delegate, live readout, ladder armed). Docs: ADR-021, PILLs 128–129, PLAN v3.2; SW cache roben-v6.

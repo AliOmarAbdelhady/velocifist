@@ -60,6 +60,10 @@ const persist = new PersistenceService();
 
 // ?pipdemo=1 — synthetic hands drive the real pipeline (AR demo / E2E)
 const pipdemo = new URLSearchParams(location.search).has('pipdemo');
+// ?ar=cpu|gpu — force the hand-tracking delegate (ADR-021; default: measured pick)
+const arParam = new URLSearchParams(location.search).get('ar');
+const arPref: 'auto' | 'gpu' | 'cpu' =
+  arParam === 'cpu' || arParam === 'gpu' ? arParam : 'auto';
 let demoHands: DemoHands | null = null;
 
 // Procedural audio (M6): created once, resumed on the first user gesture.
@@ -847,7 +851,7 @@ async function startWithCamera(tune: CarTune): Promise<void> {
     loadText.textContent = `${stage}${Math.round((performance.now() - t0) / 1000)}s`;
   }, 250);
   try {
-    await tracker.start(75_000);
+    await tracker.start(75_000, arPref);
   } finally {
     window.clearInterval(tick);
     camLoad.classList.add('hidden');
@@ -913,7 +917,7 @@ function bootWithRecovery(tune: CarTune, initialTracker: HandTracker, initialPip
     camlost.classList.add('hidden');
     tracker?.stop();
     const nt = new HandTracker();
-    await nt.start(); // calib is persisted → no re-wizard
+    await nt.start(75_000, arPref); // calib is persisted → no re-wizard
     if (nt.info.phase !== 'READY') {
       camlostReason.textContent = nt.info.error ?? nt.info.phase;
       camlost.classList.remove('hidden');

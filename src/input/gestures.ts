@@ -47,10 +47,14 @@ export const DEFAULT_GESTURE_CONFIG: GestureConfig = {
   fistOff: 0.52,
   voteWindow: 5,
   voteMin: 3,
-  wheelDeadzoneDeg: 28,
+  // ADR-021 (CPU-class AR): with the One Euro retuned the noise floor is
+  // lower, so the dead zone shrinks (more direct, small corrections reach
+  // the car) and the wheel slews faster — same directness pass the manual
+  // controllers got in ADR-019.
+  wheelDeadzoneDeg: 24,
   wheelLockDeg: 100,
   wheelCurveExp: 1.35,
-  wheelRateDeg: 430,
+  wheelRateDeg: 480,
   zoneRadiusFactor: 1.8,
   regripWindow: 1.2,
   handsLostGrace: 0.9,

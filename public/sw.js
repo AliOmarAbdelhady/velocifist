@@ -4,7 +4,7 @@
 // on first fetch (cache-first for assets, network-first for navigations).
 // The 20 MB wasm+model land in the same cache: once you have played with the
 // camera once, the whole game — tracking included — works offline.
-const CACHE = 'roben-v5'; // ADR-020: AR engine precached on first visit + visible camera loading state // zero-assist directness (ADR-019) // phone-remote auto-reconnect + versus restart fixes
+const CACHE = 'roben-v6'; // M21 CPU-class AR: measured delegate pick, adaptive inference resolution (ADR-021)
 
 self.addEventListener('install', () => {
   self.skipWaiting();
